@@ -45,7 +45,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Default admin user
 const ADMIN_USER: TenantUser = {
   id: 'admin-001',
-  companyName: 'Vision AI',
+  companyName: 'HireForce',
   username: 'admin@vision.ai',
   password: 'VisionAdmin2024!',
   n8nWebhookUrl: '',
@@ -105,16 +105,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const stored = localStorage.getItem(STORAGE_KEY);
     const users: TenantUser[] = stored ? JSON.parse(stored) : [ADMIN_USER, DEFAULT_TENANT];
     
+    console.log('🔐 Login attempt:', { username });
+    console.log('📋 Available users:', users.map(u => ({ username: u.username, userType: u.userType })));
+    
     const found = users.find(u => 
       u.username.toLowerCase() === username.toLowerCase() && 
       u.password === password
     );
     
     if (found) {
+      console.log('✅ User found:', { username: found.username, userType: found.userType, isAdmin: found.isAdmin });
       setUser(found);
       localStorage.setItem(AUTH_KEY, JSON.stringify(found));
       return true;
     }
+    
+    console.warn('❌ Login failed: User not found or password incorrect');
     return false;
   };
 
@@ -276,4 +282,13 @@ export const MASTER_API_CONFIG = {
   n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook',
   supabaseUrl: 'https://sziksecdqwwvnmuxjiim.supabase.co',
   supabaseKey: 'sb_publishable_aB2yXeG8m0KjDLZbpr8Wpg_ndKoRxKa',
+};
+
+// Reset localStorage to clear corrupted state
+export const resetAuthStorage = () => {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(AUTH_KEY);
+  const defaultUsers = [ADMIN_USER, DEFAULT_TENANT];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUsers));
+  console.log('🔄 Auth storage reset. Default users reinitialized.');
 };

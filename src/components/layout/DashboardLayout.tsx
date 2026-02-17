@@ -50,6 +50,7 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, isTrial } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
   
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/' },
@@ -64,8 +65,11 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex">
-      {/* Sidebar */}
-      <aside className="w-72 bg-[#F1F5F9] border-r border-slate-200/60 flex flex-col fixed h-screen z-20">
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 md:hidden z-10" onClick={() => setSidebarOpen(false)} />
+      )}
+      
+      <aside className={`w-72 bg-[#F1F5F9] border-r border-slate-200/60 flex flex-col fixed h-screen z-20 transform transition-transform md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative}`}>
         {/* Logo */}
         <div className="p-6 border-b border-slate-200/60">
           <Link to="/" className="flex items-center gap-3 group">
@@ -109,7 +113,12 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 ml-72 p-8 overflow-y-auto min-h-screen">
+      <main className="flex-1 md:ml-72 p-4 md:p-6 lg:p-8 overflow-y-auto min-h-screen">
+        <div className="flex md:hidden mb-4">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </button>
+        </div>
         <div className="max-w-7xl mx-auto">
           {children || <Outlet />}
         </div>

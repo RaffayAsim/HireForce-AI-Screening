@@ -58,35 +58,34 @@ const Login = () => {
       </div>
 
       {/* Logo */}
-      <div className="absolute top-12 left-12 flex items-center gap-4 z-10">
-        <div className="w-14 h-14 vision-gradient rounded-2xl flex items-center justify-center shadow-2xl shadow-emerald-500/30 ring-2 ring-white/50">
-          <Zap className="text-white fill-white" size={28} />
+      <div className="absolute top-8 md:top-12 left-8 md:left-12 flex items-center gap-3 md:gap-4 z-10">
+        <div className="w-10 h-10 md:w-14 md:h-14 vision-gradient rounded-lg md:rounded-2xl flex items-center justify-center shadow-2xl shadow-emerald-500/30 ring-2 ring-white/50">
+          <Zap className="text-white fill-white" size={20} />
         </div>
         <div className="flex flex-col">
-          <span className="text-3xl font-black tracking-tight leading-none text-[#0F2E1F]">Vision</span>
-          <span className="text-xs font-bold uppercase tracking-[0.3em] text-emerald-600 mt-1">Factory</span>
+          <span className="text-xl md:text-3xl font-black tracking-tight leading-none text-[#0F2E1F]">HireForce</span>
         </div>
       </div>
 
-      <Card className="w-full max-w-md glass-card rounded-[2.5rem] shadow-2xl border-none relative z-10 overflow-hidden">
+      <Card className="w-full max-w-md glass-card rounded-2xl md:rounded-[2.5rem] shadow-2xl border-none relative z-10 overflow-hidden mx-4 md:mx-0">
         <div className="h-2 vision-gradient" />
         
-        <CardHeader className="p-10 pb-6 text-center">
-          <div className="w-20 h-20 vision-gradient rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/30 ring-4 ring-emerald-100">
-            <Sparkles className="text-white" size={36} />
+        <CardHeader className="p-6 md:p-10 pb-4 md:pb-6 text-center">
+          <div className="w-16 h-16 md:w-20 md:h-20 vision-gradient rounded-2xl flex items-center justify-center mx-auto mb-4 md:mb-6 shadow-xl shadow-emerald-500/30 ring-4 ring-emerald-100">
+            <Sparkles className="text-white" size={28} />
           </div>
-          <CardTitle className="text-3xl font-black text-[#0F2E1F] tracking-tight">
+          <CardTitle className="text-2xl md:text-3xl font-black text-[#0F2E1F] tracking-tight">
             Welcome Back
           </CardTitle>
-          <CardDescription className="text-emerald-700/70 text-base mt-2 font-medium">
+          <CardDescription className="text-emerald-700/70 text-sm md:text-base mt-2 font-medium">
             Sign in to access your screening dashboard
           </CardDescription>
         </CardHeader>
         
-        <CardContent className="p-10 pt-0">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <CardContent className="p-6 md:p-10 pt-0">
+          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm font-bold text-emerald-800/70 uppercase tracking-widest ml-1">
+              <Label htmlFor="username" className="text-xs md:text-sm font-bold text-emerald-800/70 uppercase tracking-widest ml-1">
                 Username
               </Label>
               <Input 
@@ -96,12 +95,12 @@ const Login = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required 
-                className="h-14 rounded-2xl border-emerald-200 bg-white/70 focus-visible:ring-emerald-500/30 px-5 text-base placeholder:text-emerald-800/30"
+                className="h-12 md:h-14 rounded-2xl border-emerald-200 bg-white/70 focus-visible:ring-emerald-500/30 px-4 md:px-5 text-sm md:text-base placeholder:text-emerald-800/30"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-bold text-emerald-800/70 uppercase tracking-widest ml-1">
+              <Label htmlFor="password" className="text-xs md:text-sm font-bold text-emerald-800/70 uppercase tracking-widest ml-1">
                 Password
               </Label>
               <div className="relative">
@@ -112,19 +111,19 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required 
-                  className="h-14 rounded-2xl border-emerald-200 bg-white/70 focus-visible:ring-emerald-500/30 px-5 pr-12 text-base placeholder:text-emerald-800/30"
+                  className="h-12 md:h-14 rounded-2xl border-emerald-200 bg-white/70 focus-visible:ring-emerald-500/30 px-4 md:px-5 pr-12 text-sm md:text-base placeholder:text-emerald-800/30"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-600/50 hover:text-emerald-600 transition-colors"
+                  className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-emerald-600/50 hover:text-emerald-600 transition-colors"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center justify-between text-xs md:text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="rounded border-emerald-300 text-emerald-500 focus:ring-emerald-500" />
                 <span className="text-emerald-800/70 font-medium">Remember me</span>
@@ -137,7 +136,7 @@ const Login = () => {
             <Button 
               type="submit" 
               disabled={loading}
-              className="w-full h-14 vision-button text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/30 border-none"
+              className="w-full h-12 md:h-14 vision-button text-white rounded-2xl font-black text-base md:text-lg shadow-xl shadow-emerald-500/30 border-none"
             >
               {loading ? (
                 <Loader2 className="animate-spin mr-2" size={24} />
@@ -163,21 +162,13 @@ const Login = () => {
               </Button>
             </Link>
           </div>
-
-          <div className="mt-6 p-4 bg-emerald-50/70 rounded-2xl border border-emerald-100">
-            <p className="text-xs text-emerald-800/70 font-medium text-center">
-              <span className="font-bold">Demo Credentials:</span><br />
-              Admin: admin@vision.ai / VisionAdmin2024!<br />
-              Pro: demo@hireflow.ai / DemoPass123!
-            </p>
-          </div>
         </CardContent>
       </Card>
 
       {/* Footer */}
       <div className="absolute bottom-8 left-0 right-0 text-center">
         <p className="text-sm text-emerald-800/50 font-medium">
-          © 2024 Vision Factory. All rights reserved.
+          © 2026 HireForce. All rights reserved.
         </p>
       </div>
     </div>

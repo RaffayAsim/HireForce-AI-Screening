@@ -22,11 +22,11 @@ import { Candidate, Job } from '@/lib/supabase';
 import { useRole } from '@/contexts/RoleContext';
 
 const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
-  <Card className="glass-card rounded-[2.5rem] overflow-hidden group hover:translate-y-[-4px] transition-all duration-500">
-    <CardContent className="p-8">
-      <div className="flex justify-between items-start mb-6">
-        <div className={`p-4 rounded-[1.5rem] ${color} bg-opacity-10 ring-1 ring-inset ${color.replace('bg-', 'ring-')}/20`}>
-          <Icon className={color.replace('bg-', 'text-')} size={24} />
+  <Card className="glass-card rounded-2xl md:rounded-[2.5rem] overflow-hidden group hover:translate-y-[-4px] transition-all duration-500">
+    <CardContent className="p-4 md:p-6 lg:p-8">
+      <div className="flex justify-between items-start mb-4 md:mb-6">
+        <div className={`p-3 md:p-4 rounded-xl md:rounded-[1.5rem] ${color} bg-opacity-10 ring-1 ring-inset ${color.replace('bg-', 'ring-')}/20`}>
+          <Icon className={color.replace('bg-', 'text-')} size={20} />
         </div>
         {trend && (
           <div className="flex items-center gap-1 text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold">
@@ -36,8 +36,8 @@ const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
         )}
       </div>
       <div>
-        <p className="text-slate-500 text-sm font-semibold tracking-wide uppercase">{title}</p>
-        <h3 className="text-4xl font-black text-[#0F172A] mt-2 tracking-tight">{value}</h3>
+        <p className="text-slate-500 text-xs md:text-sm font-semibold tracking-wide uppercase">{title}</p>
+        <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-[#0F172A] mt-2 tracking-tight">{value}</h3>
       </div>
     </CardContent>
   </Card>
@@ -83,15 +83,15 @@ const Index = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 md:mb-12 gap-4 md:gap-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 rounded-full px-3 py-1 font-bold text-[10px] uppercase tracking-widest">
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 rounded-full px-3 py-1 font-bold text-[9px] md:text-[10px] uppercase tracking-widest">
               {loading ? 'Loading...' : 'Connected to Supabase'}
             </Badge>
           </div>
-          <h1 className="text-4xl font-black text-[#0F172A] tracking-tight">Executive Overview</h1>
-          <p className="text-slate-500 mt-2 text-lg font-medium">The Smart Way to Build Your Team.</p>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-[#0F172A] tracking-tight">Executive Overview</h1>
+          <p className="text-slate-500 mt-2 text-sm md:text-base font-medium">The Smart Way to Build Your Team.</p>
         </div>
         <div className="flex items-center gap-4">
           <button className="p-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
@@ -106,7 +106,7 @@ const Index = () => {
         <ActionCenter candidates={candidates} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 lg:gap-8 mb-8 md:mb-12">
         <StatCard 
           title="Active Positions" 
           value={loading ? '...' : activeJobs} 
@@ -128,12 +128,12 @@ const Index = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 glass-card rounded-[3rem] p-10">
-          <div className="flex justify-between items-center mb-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
+        <div className="lg:col-span-2 glass-card rounded-2xl md:rounded-[3rem] p-4 md:p-6 lg:p-10">
+          <div className="flex justify-between items-start md:items-center mb-6 md:mb-10 flex-col md:flex-row gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-[#0F172A]">Real-time Activity</h2>
-              <p className="text-slate-500 text-sm mt-1">Live updates from your active pipelines</p>
+              <h2 className="text-xl md:text-2xl font-bold text-[#0F172A]">Real-time Activity</h2>
+              <p className="text-slate-500 text-xs md:text-sm mt-1">Live updates from your active pipelines</p>
             </div>
             <button className="flex items-center gap-2 text-emerald-600 text-sm font-bold hover:gap-3 transition-all">
               View Full Audit <ChevronRight size={16} />

@@ -99,10 +99,10 @@ const Jobs = () => {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 md:mb-12 gap-4 md:gap-6">
         <div>
-          <h1 className="text-4xl font-black text-[#0F172A] tracking-tight">Job Management</h1>
-          <p className="text-slate-500 mt-2 text-lg font-medium">
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-[#0F172A] tracking-tight">Job Management</h1>
+          <p className="text-slate-500 mt-2 text-sm md:text-base font-medium">
             {loading ? 'Loading jobs from Supabase...' : `Managing ${jobs?.length || 0} active job openings`}
           </p>
         </div>
@@ -124,16 +124,16 @@ const Jobs = () => {
           const highScoringCount = getHighScoringCandidates(job.id);
           
           return (
-            <Card key={job.id} className="glass-card rounded-[2.5rem] overflow-hidden hover:translate-y-[-4px] transition-all duration-500 group cursor-pointer" onClick={() => handleJobClick(job)}>
-              <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-8 w-full md:w-auto">
-                  <div className="w-16 h-16 bg-emerald-600/10 rounded-[1.5rem] flex items-center justify-center ring-1 ring-emerald-600/20 group-hover:scale-110 transition-transform duration-300">
-                    <Briefcase className="text-emerald-600" size={28} />
+            <Card key={job.id} className="glass-card rounded-2xl md:rounded-[2.5rem] overflow-hidden hover:translate-y-[-4px] transition-all duration-500 group cursor-pointer" onClick={() => handleJobClick(job)}>
+              <CardContent className="p-4 md:p-6 lg:p-8 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
+                <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto">
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-emerald-600/10 rounded-xl md:rounded-[1.5rem] flex items-center justify-center ring-1 ring-emerald-600/20 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                    <Briefcase className="text-emerald-600" size={24} />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-[#0F172A] tracking-tight">{job.title}</h3>
-                    <div className="flex items-center gap-4 mt-2 flex-wrap">
-                      <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">{job.location || job.department}</span>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg md:text-xl font-bold text-[#0F172A] tracking-tight truncate">{job.title}</h3>
+                    <div className="flex items-center gap-2 md:gap-4 mt-2 flex-wrap text-xs md:text-sm">
+                      <span className="font-bold text-slate-400 uppercase tracking-widest">{job.location || job.department}</span>
                       <span className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
                       <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
                         <Users size={16} className="text-slate-400" />
@@ -156,42 +156,42 @@ const Jobs = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+                <div className="flex items-center gap-2 md:gap-6 w-full md:w-auto justify-between md:justify-end flex-wrap md:flex-nowrap">
                   <Badge className={cn(
-                    "rounded-full px-4 py-1.5 font-bold text-[10px] uppercase tracking-widest border-none",
+                    "rounded-full px-3 md:px-4 py-1 md:py-1.5 font-bold text-[9px] md:text-[10px] uppercase tracking-widest border-none",
                     job.status === 'Active' || !job.status ? 'bg-emerald-500/10 text-emerald-600' : 
                     job.status === 'Draft' ? 'bg-amber-500/10 text-amber-600' : 
                     'bg-slate-500/10 text-slate-500'
                   )}>
                     {job.status || 'Active'}
                   </Badge>
-                  <div className="flex gap-3">
+                  <div className="flex gap-2 md:gap-3">
                     <Button 
                       variant="outline" 
                       size="icon" 
-                      className="w-12 h-12 rounded-2xl border-slate-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all" 
+                      className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-2xl border-slate-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all" 
                       title="Copy Application Link"
                       onClick={(e) => copyApplicationLink(job.id, e)}
                     >
-                      {copiedLink === job.id ? <Check size={20} /> : <LinkIcon size={20} />}
+                      {copiedLink === job.id ? <Check size={18} /> : <LinkIcon size={18} />}
                     </Button>
                     <Button 
                       variant="outline" 
                       size="icon" 
-                      className="w-12 h-12 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all"
+                      className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-2xl border-slate-200 hover:bg-slate-50 transition-all"
                       title="View Application Page"
                       onClick={(e) => openApplicationPage(job.id, e)}
                     >
-                      <ExternalLink size={20} />
+                      <ExternalLink size={18} />
                     </Button>
                     <Button 
                       variant="outline" 
                       size="icon" 
-                      className="w-12 h-12 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all"
+                      className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-2xl border-slate-200 hover:bg-slate-50 transition-all"
                       title="More Options"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <MoreHorizontal size={20} />
+                      <MoreHorizontal size={18} />
                     </Button>
                   </div>
                 </div>

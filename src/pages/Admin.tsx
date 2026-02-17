@@ -162,7 +162,7 @@ const Admin = () => {
               <Zap className="text-white fill-white" size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-[#0F2E1F] tracking-tight">Vision Factory</h1>
+              <h1 className="text-2xl font-black text-[#0F2E1F] tracking-tight">HireForce</h1>
               <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Admin Control Tower</p>
             </div>
           </div>
