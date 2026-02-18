@@ -15,20 +15,35 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
-import { fetchJobById, createCandidateApplication } from '@/lib/api';
+import { fetchJobById, createCandidateApplication, setTenantConfig } from '@/lib/api';
 import { showSuccess, showError } from '@/utils/toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { TrialLimitModal } from '@/components/trial/TrialLimitModal';
 
 const Apply = () => {
   const { jobId } = useParams();
-  const { isTrial, hasReachedScanLimit, incrementUsage } = useAuth();
+  const { user, isTrial, hasReachedScanLimit, incrementUsage } = useAuth();
   const [job, setJob] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [customQuestions, setCustomQuestions] = useState<string[]>([]);
   const [showLimitModal, setShowLimitModal] = useState(false);
+
+  // Initialize tenant config with fallback to master config
+  useEffect(() => {
+    if (user) {
+      console.log('✅ User authenticated, setting tenant config');
+      setTenantConfig({
+        n8nWebhookUrl: user.n8nWebhookUrl,
+        supabaseUrl: user.supabaseUrl,
+        supabaseKey: user.supabaseKey,
+      });
+    } else {
+      // For public users (no login), master config is used as fallback
+      console.log('✅ Public user (no auth), master config will be used');
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!jobId) return;

@@ -48,9 +48,9 @@ const ADMIN_USER: TenantUser = {
   companyName: 'HireForce',
   username: 'admin@vision.ai',
   password: 'VisionAdmin2024!',
-  n8nWebhookUrl: '',
-  supabaseUrl: '',
-  supabaseKey: '',
+  n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook/resume-screening',
+  supabaseUrl: 'https://sziksecdqwwvnmuxjiim.supabase.co',
+  supabaseKey: 'sb_publishable_aB2yXeG8m0KjDLZbpr8Wpg_ndKoRxKa',
   createdAt: new Date().toISOString(),
   isAdmin: true,
   userType: 'admin',
@@ -64,7 +64,7 @@ const DEFAULT_TENANT: TenantUser = {
   companyName: 'HireFlow Demo',
   username: 'demo@hireflow.ai',
   password: 'DemoPass123!',
-  n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook',
+  n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook/resume-screening',
   supabaseUrl: 'https://sziksecdqwwvnmuxjiim.supabase.co',
   supabaseKey: 'sb_publishable_aB2yXeG8m0KjDLZbpr8Wpg_ndKoRxKa',
   createdAt: new Date().toISOString(),
@@ -243,8 +243,18 @@ export const addUser = (user: Omit<TenantUser, 'id' | 'createdAt'>): TenantUser 
   const stored = localStorage.getItem(STORAGE_KEY);
   const users: TenantUser[] = stored ? JSON.parse(stored) : [ADMIN_USER, DEFAULT_TENANT];
   
+  // For trial users, assign shared API credentials if not provided
+  const userWithCredentials = user.userType === 'trial' && !user.n8nWebhookUrl
+    ? {
+        ...user,
+        n8nWebhookUrl: MASTER_API_CONFIG.n8nWebhookUrl,
+        supabaseUrl: MASTER_API_CONFIG.supabaseUrl,
+        supabaseKey: MASTER_API_CONFIG.supabaseKey,
+      }
+    : user;
+  
   const newUser: TenantUser = {
-    ...user,
+    ...userWithCredentials,
     id: `tenant-${Date.now()}`,
     createdAt: new Date().toISOString(),
   };
@@ -279,7 +289,7 @@ export const generateCredentials = () => {
 
 // Master API credentials for trial users
 export const MASTER_API_CONFIG = {
-  n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook',
+  n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook/resume-screening',
   supabaseUrl: 'https://sziksecdqwwvnmuxjiim.supabase.co',
   supabaseKey: 'sb_publishable_aB2yXeG8m0KjDLZbpr8Wpg_ndKoRxKa',
 };

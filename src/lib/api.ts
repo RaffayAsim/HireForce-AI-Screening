@@ -7,12 +7,22 @@ let tenantConfig: {
   supabaseKey: string;
 } | null = null;
 
+// Master API config as fallback
+const MASTER_CONFIG = {
+  n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook/resume-screening',
+  supabaseUrl: 'https://sziksecdqwwvnmuxjiim.supabase.co',
+  supabaseKey: 'sb_publishable_aB2yXeG8m0KjDLZbpr8Wpg_ndKoRxKa',
+};
+
 export const setTenantConfig = (config: typeof tenantConfig) => {
   tenantConfig = config;
+  console.log('✅ Tenant config set:', config);
 };
 
 const getN8NWebhookUrl = () => {
-  return tenantConfig?.n8nWebhookUrl || import.meta.env.VITE_N8N_WEBHOOK_URL || '';
+  const url = tenantConfig?.n8nWebhookUrl || MASTER_CONFIG.n8nWebhookUrl || import.meta.env.VITE_N8N_WEBHOOK_URL || '';
+  console.log('🔗 Using n8n webhook URL:', url);
+  return url;
 };
 
 // Job API functions
@@ -162,9 +172,12 @@ export const createCandidateApplication = async (data: any) => {
           resumeUrl: resumeUrl,
           candidateName: data.name,
           candidateEmail: data.email,
+          jobTitle: data.jobTitle || 'Unknown Position',
         });
+        console.log('✅ Webhook sent successfully for candidate:', newCandidate.id);
       } catch (n8nError) {
         console.warn('⚠️ n8n webhook failed, but candidate was saved:', n8nError);
+        // Don't throw - candidate is already saved
       }
     }
 
@@ -178,22 +191,40 @@ export const createCandidateApplication = async (data: any) => {
 // n8n Webhook function
 export const sendToN8n = async (endpoint: string, data: any) => {
   try {
-    const webhookUrl = `${getN8NWebhookUrl()}/${endpoint}`;
+    const baseUrl = getN8NWebhookUrl();
+    
+    if (!baseUrl) {
+      throw new Error('n8n Webhook URL not configured. Check tenant config.');
+    }
+    
+    // If the URL already ends with /resume-screening, use it directly
+    // Otherwise append the endpoint
+    const webhookUrl = baseUrl.includes('/resume-screening') ? baseUrl : `${baseUrl}/${endpoint}`;
     console.log(`📤 Sending webhook to n8n: ${webhookUrl}`);
+    console.log(`📊 Payload:`, JSON.stringify(data, null, 2));
     
     const response = await fetch(webhookUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
       body: JSON.stringify(data),
     });
     
+    console.log(`📊 Response Status: ${response.status} ${response.statusText}`);
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`❌ n8n HTTP Error: ${response.status}`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
     
-    return await response.json();
+    const result = await response.json();
+    console.log(`✅ n8n Success:`, result);
+    return result;
   } catch (error) {
-    console.error("❌ n8n Error:", error);
+    console.error("❌ n8n Webhook Error:", error);
     throw error;
   }
 };
