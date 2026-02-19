@@ -6,6 +6,7 @@ import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import { addUser, generateCredentials, useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { showSuccess, showError } from '../utils/toast';
 
 const TrialRegistration = () => {
   const { login } = useAuth();
@@ -70,25 +71,25 @@ const TrialRegistration = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-emerald-50 via-white to-white flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-cyan-100 flex flex-col items-center justify-center p-6">
       
       {/* Brand Header */}
       <div className="mb-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
-          <div className="bg-gradient-to-br from-[#00F5A0] to-[#00D9F5] p-2 rounded-xl">
-            <ShieldCheck className="text-white" size={28} />
+          <div className="bg-cyan-500 p-2 rounded-lg">
+            <ShieldCheck className="text-white" size={24} />
           </div>
-          <span className="text-3xl font-black tracking-tighter text-slate-900">Hire Force</span>
+          <span className="text-2xl font-bold tracking-tight text-gray-900">Hire Force</span>
         </div>
-        <p className="text-slate-500 font-medium">The Smart Way to Build Your Team.</p>
+        <p className="text-gray-600 font-medium text-sm">The Smart Way to Build Your Team.</p>
       </div>
 
-      <Card className="w-full max-w-xl border-none shadow-[0_20px_50px_rgba(0,245,160,0.15)] bg-white/80 backdrop-blur-xl rounded-[2.5rem] overflow-hidden">
-        <CardHeader className="p-10 pb-6 text-center">
-          <CardTitle className="text-3xl font-black text-slate-900 tracking-tight mb-2">
-            Start Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">Free Trial</span>
+      <Card className="w-full max-w-xl border border-gray-200 shadow-sm bg-white rounded-lg overflow-hidden">
+        <CardHeader className="p-8 pb-6 text-center border-b border-gray-200">
+          <CardTitle className="text-2xl font-bold text-gray-900 mb-2">
+            Start Your Free Trial
           </CardTitle>
-          <CardDescription className="text-slate-500 text-lg font-medium">
+          <CardDescription className="text-gray-600 text-sm">
             Get 5 AI-powered candidate scans & 1 job posting free
           </CardDescription>
         </CardHeader>
@@ -129,15 +130,15 @@ const TrialRegistration = () => {
                       value={credentials.password} 
                       readOnly 
                       type="password"
-                      className="flex-1 bg-white border-emerald-200 text-emerald-900 font-mono"
+                      className="flex-1 bg-gray-50 border-gray-300 text-gray-900 font-mono text-sm"
                     />
                     <Button 
                       size="sm" 
                       variant="outline" 
                       onClick={() => navigator.clipboard.writeText(credentials.password)}
-                      className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
                     >
-                      <Copy size={16} />
+                      <Copy size={14} />
                     </Button>
                   </div>
                 </div>
@@ -146,15 +147,15 @@ const TrialRegistration = () => {
               <div className="pt-4">
                 <Button 
                   onClick={() => navigate('/')}
-                  className="w-full h-14 bg-gradient-to-r from-[#00F5A0] to-[#00D9F5] hover:opacity-90 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/20 border-none gap-2"
+                  className="w-full h-10 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-bold text-sm gap-2"
                 >
                   Start Using Hire Force
-                  <ArrowRight size={20} />
+                  <ArrowRight size={16} />
                 </Button>
               </div>
               
               <div className="text-center">
-                <p className="text-sm text-slate-400 font-medium">
+                <p className="text-xs text-gray-500 font-medium">
                   You are now logged in! Click above to access your dashboard
                 </p>
               </div>
@@ -174,13 +175,13 @@ const TrialRegistration = () => {
                 value={formData.fullName}
                 onChange={handleChange}
                 required 
-                className="h-14 rounded-2xl border-slate-100 bg-white focus-visible:ring-emerald-500/30 px-5 text-base shadow-sm"
+                className="h-10 rounded-lg border-gray-300 bg-white px-4 text-sm"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="organizationName" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                <Building2 size={14} className="text-emerald-500" />
+              <Label htmlFor="organizationName" className="text-xs font-bold text-gray-700 uppercase flex items-center gap-2">
+                <Building2 size={12} className="text-cyan-600" />
                 Organization Name *
               </Label>
               <Input 
@@ -191,14 +192,14 @@ const TrialRegistration = () => {
                 value={formData.organizationName}
                 onChange={handleChange}
                 required 
-                className="h-14 rounded-2xl border-slate-100 bg-white focus-visible:ring-emerald-500/30 px-5 text-base shadow-sm"
+                className="h-10 rounded-lg border-gray-300 bg-white px-4 text-sm"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                  <Mail size={14} className="text-emerald-500" />
+                <Label htmlFor="email" className="text-xs font-bold text-gray-700 uppercase flex items-center gap-2">
+                  <Mail size={12} className="text-cyan-600" />
                   Email *
                 </Label>
                 <Input 
@@ -209,13 +210,13 @@ const TrialRegistration = () => {
                   value={formData.email}
                   onChange={handleChange}
                   required 
-                  className="h-14 rounded-2xl border-slate-100 bg-white focus-visible:ring-emerald-500/30 px-5 text-base shadow-sm"
+                  className="h-10 rounded-lg border-gray-300 bg-white px-4 text-sm"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                  <Phone size={14} className="text-emerald-500" />
+                <Label htmlFor="phone" className="text-xs font-bold text-gray-700 uppercase flex items-center gap-2">
+                  <Phone size={12} className="text-cyan-600" />
                   Phone *
                 </Label>
                 <Input 
@@ -226,7 +227,7 @@ const TrialRegistration = () => {
                   value={formData.phone}
                   onChange={handleChange}
                   required 
-                  className="h-14 rounded-2xl border-slate-100 bg-white focus-visible:ring-emerald-500/30 px-5 text-base shadow-sm"
+                  className="h-10 rounded-lg border-gray-300 bg-white px-4 text-sm"
                 />
               </div>
             </div>
@@ -235,14 +236,14 @@ const TrialRegistration = () => {
               <Button 
                 type="submit" 
                 disabled={loading}
-                className="w-full h-14 bg-gradient-to-r from-[#00F5A0] to-[#00D9F5] hover:opacity-90 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-500/20 border-none gap-2 transition-all active:scale-[0.98]"
+                className="w-full h-10 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-bold text-sm gap-2 transition-all active:scale-[0.98]"
               >
                 {loading ? (
-                  <Loader2 className="animate-spin" size={24} />
+                  <Loader2 className="animate-spin" size={16} />
                 ) : (
                   <>
                     Deploy My Trial
-                    <ArrowRight size={20} />
+                    <ArrowRight size={16} />
                   </>
                 )}
               </Button>

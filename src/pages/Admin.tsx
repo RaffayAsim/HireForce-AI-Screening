@@ -153,68 +153,68 @@ const Admin = () => {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen mesh-gradient">
+    <div className="min-h-screen bg-cyan-100">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-emerald-100 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 vision-gradient rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Zap className="text-white fill-white" size={24} />
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-cyan-500 rounded flex items-center justify-center">
+              <Zap className="text-white fill-white" size={20} />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-[#0F2E1F] tracking-tight">HireForce</h1>
-              <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Admin Control Tower</p>
+              <h1 className="text-lg font-bold text-gray-900">HireForce</h1>
+              <p className="text-xs font-semibold text-gray-500 uppercase">Admin Control Tower</p>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
-            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 px-4 py-1.5 text-sm font-bold rounded-full">
-              <Users className="w-4 h-4 mr-2" />
+            <Badge className="bg-cyan-100 text-cyan-900 border-cyan-200 px-3 py-1 text-xs font-semibold rounded-full">
+              <Users className="w-3 h-3 mr-1.5" />
               {users.length + trialUsers.length} Users
             </Badge>
-            <Button variant="outline" onClick={handleLogout} className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold gap-2">
-              <LogOut size={18} />
+            <Button onClick={handleLogout} className="rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 font-semibold text-sm gap-2 bg-white border">
+              <LogOut size={16} />
               Logout
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-8 py-12">
+      <main className="max-w-7xl mx-auto px-8 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="glass-card rounded-[2rem] border-none">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Card className="border border-gray-200 rounded-lg">
             <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center">
-                <Users className="text-emerald-600" size={28} />
+              <div className="w-12 h-12 bg-cyan-100 rounded flex items-center justify-center">
+                <Users className="text-cyan-600" size={24} />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-800/70 uppercase tracking-widest">Pro Users</p>
-                <p className="text-3xl font-black text-[#0F2E1F]">{users.length}</p>
+                <p className="text-xs font-semibold text-gray-600 uppercase">Pro Users</p>
+                <p className="text-2xl font-bold text-gray-900">{users.length}</p>
               </div>
             </CardContent>
           </Card>
           
-          <Card className="glass-card rounded-[2rem] border-none">
+          <Card className="border border-gray-200 rounded-lg">
             <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center">
-                <Sparkles className="text-amber-600" size={28} />
+              <div className="w-12 h-12 bg-amber-100 rounded flex items-center justify-center">
+                <Sparkles className="text-amber-600" size={24} />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-800/70 uppercase tracking-widest">Trial Users</p>
-                <p className="text-3xl font-black text-[#0F2E1F]">{trialUsers.length}</p>
+                <p className="text-xs font-semibold text-gray-600 uppercase">Trial Users</p>
+                <p className="text-2xl font-bold text-gray-900">{trialUsers.length}</p>
               </div>
             </CardContent>
           </Card>
           
-          <Card className="glass-card rounded-[2rem] border-none">
+          <Card className="border border-gray-200 rounded-lg">
             <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center">
-                <Building2 className="text-blue-600" size={28} />
+              <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center">
+                <Building2 className="text-blue-600" size={24} />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-800/70 uppercase tracking-widest">New This Month</p>
-                <p className="text-3xl font-black text-[#0F2E1F]">
+                <p className="text-xs font-semibold text-gray-600 uppercase">New This Month</p>
+                <p className="text-2xl font-bold text-gray-900">
                   {[...users, ...trialUsers].filter(u => {
                     const created = new Date(u.createdAt);
                     const now = new Date();
@@ -225,14 +225,14 @@ const Admin = () => {
             </CardContent>
           </Card>
           
-          <Card className="glass-card rounded-[2rem] border-none">
+          <Card className="border border-gray-200 rounded-lg">
             <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center">
-                <Database className="text-purple-600" size={28} />
+              <div className="w-12 h-12 bg-purple-100 rounded flex items-center justify-center">
+                <Database className="text-purple-600" size={24} />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-800/70 uppercase tracking-widest">Active DBs</p>
-                <p className="text-3xl font-black text-[#0F2E1F]">
+                <p className="text-xs font-semibold text-gray-600 uppercase">Active DBs</p>
+                <p className="text-2xl font-bold text-gray-900">
                   {users.filter(u => u.supabaseUrl).length}
                 </p>
               </div>
@@ -242,20 +242,20 @@ const Admin = () => {
 
         {/* Tabs for Pro Users and Trial Leads */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-white/50 p-2 rounded-2xl h-auto mb-8">
+          <TabsList className="bg-white p-0 h-auto mb-6 gap-2 rounded-lg">
             <TabsTrigger 
               value="pro" 
-              className="rounded-xl px-6 py-3 font-bold data-[state=active]:bg-emerald-600 data-[state=active]:text-white transition-all"
+              className="rounded-lg px-4 py-2 font-semibold data-[state=active]:bg-cyan-500 data-[state=active]:text-white text-gray-700 transition-all"
             >
               Pro Users
             </TabsTrigger>
             <TabsTrigger 
               value="trials" 
-              className="rounded-xl px-6 py-3 font-bold data-[state=active]:bg-amber-500 data-[state=active]:text-white transition-all"
+              className="rounded-lg px-4 py-2 font-semibold data-[state=active]:bg-cyan-500 data-[state=active]:text-white text-gray-700 transition-all"
             >
               Trial Leads
               {trialUsers.length > 0 && (
-                <Badge className="ml-2 bg-amber-100 text-amber-700 rounded-full">
+                <Badge className="ml-2 bg-cyan-100 text-cyan-700 rounded-full text-xs">
                   {trialUsers.length}
                 </Badge>
               )}
@@ -263,29 +263,29 @@ const Admin = () => {
           </TabsList>
 
           <TabsContent value="pro" className="mt-0">
-            <Card className="glass-card rounded-[2.5rem] border-none overflow-hidden">
-              <CardHeader className="p-8 pb-4 flex flex-row items-center justify-between">
+            <Card className="border border-gray-200 rounded-lg overflow-hidden">
+              <CardHeader className="p-6 pb-4 flex flex-row items-center justify-between bg-white border-b border-gray-200">
                 <div>
-                  <CardTitle className="text-2xl font-black text-[#0F2E1F] tracking-tight">Pro User Management</CardTitle>
-                  <CardDescription className="text-emerald-700/70 mt-1">
+                  <CardTitle className="text-lg font-bold text-gray-900">Pro User Management</CardTitle>
+                  <CardDescription className="text-gray-600 text-sm mt-1">
                     Manage paid tenant accounts with custom integrations
                   </CardDescription>
                 </div>
                 
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
-                    <Button className="vision-button text-white rounded-xl font-bold gap-2 h-12 px-6 border-none shadow-lg shadow-emerald-500/30">
-                      <Plus size={20} />
+                    <Button className="bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-semibold gap-2 h-9 px-4 text-sm">
+                      <Plus size={16} />
                       Add Pro User
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px] rounded-[2.5rem] border-none shadow-2xl bg-white/95 backdrop-blur-2xl p-0 overflow-hidden">
-                    <div className="h-2 vision-gradient" />
-                    <div className="p-8">
+                  <DialogContent className="sm:max-w-[600px] rounded-lg border border-gray-200 shadow-lg bg-white p-0 overflow-hidden">
+                    <div className="h-1 bg-cyan-500" />
+                    <div className="p-6">
                       <DialogHeader className="mb-6">
-                        <DialogTitle className="text-2xl font-black text-[#0F2E1F] tracking-tight flex items-center gap-3">
-                          <div className="w-10 h-10 vision-gradient rounded-xl flex items-center justify-center">
-                            <Plus className="text-white" size={20} />
+                        <DialogTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                          <div className="w-8 h-8 bg-cyan-500 rounded flex items-center justify-center">
+                            <Plus className="text-white" size={16} />
                           </div>
                           Add New Pro User
                         </DialogTitle>
