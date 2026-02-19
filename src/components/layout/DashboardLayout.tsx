@@ -49,12 +49,12 @@ const SidebarItem = ({ icon: Icon, label, to, badge }: any) => {
 const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, isTrial } = useAuth();
+  const { logout, isTrial, quotaStatus } = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/' },
-    { icon: Briefcase, label: 'Jobs', to: '/jobs' },
+    { icon: Briefcase, label: 'Jobs', to: '/jobs', warn: quotaStatus?.jobsExhausted },
     { icon: Users, label: 'Talent Pool', to: '/talent-pool' },
   ];
 
@@ -120,6 +120,30 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
           </button>
         </div>
         <div className="max-w-7xl mx-auto">
+          {/* Global trial banner - appears on all pages for trial users when quota exhausted */}
+          {isTrial && (quotaStatus?.scansExhausted || quotaStatus?.jobsExhausted) && (
+            <div className="mb-6 rounded-lg border-2 border-rose-400 bg-rose-50/40 p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-rose-700">Trial quota finished</p>
+                <p className="text-xs text-rose-700/90">Don't worry — get 20% off your first month when you upgrade.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => window.open('https://hireforce-amber.vercel.app/#get-started', '_blank')}
+                  className="px-4 py-2 bg-rose-600 text-white rounded-2xl text-sm font-bold hover:bg-rose-700"
+                >
+                  Get Started Today
+                </button>
+                <button
+                  onClick={() => window.open('https://hireforce-amber.vercel.app/#get-started', '_blank')}
+                  className="px-3 py-2 bg-white border border-rose-200 text-rose-700 rounded-2xl text-sm font-semibold hover:bg-rose-50"
+                >
+                  Get Started Today
+                </button>
+              </div>
+            </div>
+          )}
+
           {children || <Outlet />}
         </div>
       </main>

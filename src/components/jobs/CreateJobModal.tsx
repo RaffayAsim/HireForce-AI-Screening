@@ -21,7 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { TrialLimitModal } from '@/components/trial/TrialLimitModal';
 
 const CreateJobModal = () => {
-  const { isViewer, isTrial, hasReachedJobLimit, incrementJobCount } = useAuth();
+  const { user, isViewer, isTrial, hasReachedJobLimit, incrementJobCount } = useAuth();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -40,6 +40,13 @@ const CreateJobModal = () => {
     setOpen(true);
   };
 
+  // Listen for global requests to open the create-job modal
+  React.useEffect(() => {
+    const handler = () => handleOpen();
+    window.addEventListener('open_create_job', handler as EventListener);
+    return () => window.removeEventListener('open_create_job', handler as EventListener);
+  }, [isTrial, user]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -57,7 +64,7 @@ const CreateJobModal = () => {
     try {
       console.log('📝 Form data received:', data);
       
-      const newRecord = await createJobInSupabase(data);
+      const newRecord = await createJobInSupabase(data, user?.id);
       const jobId = newRecord.id;
       const generatedLink = `${window.location.origin}/apply/${jobId}`;
       
@@ -228,8 +235,14 @@ Question: How do you handle tight deadlines?`}
 
       <TrialLimitModal 
         open={showLimitModal} 
-        onClose={() => setShowLimitModal(false)} 
-        type="job" 
+        onClose={() => {
+          setShowLimitModal(false);
+          if (isTrial) {
+            // Close parent create job dialog for trial users to prevent further actions
+            setOpen(false);
+          }
+        }} 
+        type="job"
       />
     </>
   );

@@ -92,7 +92,7 @@ const Apply = () => {
         cover_letter: formData.get('cover_letter') as string,
         screening_answers: customQuestions.map((_, i) => formData.get(`question_${i}`) as string),
         resume_file: file,
-      });
+      }, job?.user_id);
       
       if (isTrial) {
         incrementUsage();
@@ -206,12 +206,28 @@ const Apply = () => {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</Label>
+                  <Input name="phone" type="tel" placeholder="+1 (555) 000-0000" className="h-14 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white transition-all px-5" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">LinkedIn Profile</Label>
+                  <Input name="linkedin" type="url" placeholder="https://linkedin.com/in/yourprofile" className="h-14 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white transition-all px-5" />
+                </div>
+              </div>
+
               {customQuestions.map((question, index) => (
                 <div key={index} className="space-y-2">
                   <Label className="text-sm font-bold text-slate-700">{question}</Label>
                   <Textarea name={`question_${index}`} required className="min-h-[100px] rounded-2xl border-slate-100 bg-slate-50 focus:bg-white p-5" />
                 </div>
               ))}
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Cover Letter</Label>
+                <Textarea name="cover_letter" placeholder="Tell us why you're a great fit for this role..." className="min-h-[120px] rounded-2xl border-slate-100 bg-slate-50 focus:bg-white p-5" />
+              </div>
 
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Upload Resume (PDF)</Label>

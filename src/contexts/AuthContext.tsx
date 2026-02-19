@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { subscribeToCandidates, subscribeToJobs } from '@/lib/api';
 
 export type UserType = 'admin' | 'pro' | 'trial';
 
@@ -38,6 +39,12 @@ interface AuthContextType {
   hasReachedScanLimit: () => boolean;
   hasReachedJobLimit: () => boolean;
   getRemainingScans: () => number;
+  quotaStatus: {
+    scansExhausted: boolean;
+    jobsExhausted: boolean;
+    updatedAt?: string | null;
+  } | null;
+  acknowledgeQuota: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -79,6 +86,7 @@ const AUTH_KEY = 'vision_auth';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<TenantUser | null>(null);
+  const [quotaStatus, setQuotaStatus] = useState<{ scansExhausted: boolean; jobsExhausted: boolean; updatedAt?: string | null } | null>(null);
 
   // Initialize default users on mount
   useEffect(() => {
@@ -100,6 +108,80 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   }, []);
+
+  // Keep auth state in sync across tabs and internal updates
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === AUTH_KEY) {
+        try {
+          const parsed = e.newValue ? JSON.parse(e.newValue) : null;
+          setUser(parsed);
+        } catch {
+          // ignore parse errors
+        }
+      }
+    };
+
+    const handleAuthUpdate = () => {
+      const session = localStorage.getItem(AUTH_KEY);
+      if (session) {
+        try {
+          const parsed = JSON.parse(session);
+          setUser(parsed);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('auth_update', handleAuthUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('auth_update', handleAuthUpdate as EventListener);
+    };
+  }, []);
+
+  // Recompute usage and job counts in real-time from Supabase subscriptions
+  useEffect(() => {
+    if (!user || user.userType !== 'trial') return;
+    if (!user.id) return;
+
+    let unsubCandidates: (() => void) | null = null;
+    let unsubJobs: (() => void) | null = null;
+
+    try {
+      unsubCandidates = subscribeToCandidates((candidates) => {
+        const count = Array.isArray(candidates) ? candidates.length : 0;
+        const updatedUser = { ...user, usageCount: count };
+        updateUserInStorage(updatedUser);
+        setUser(updatedUser);
+        try { window.dispatchEvent(new Event('auth_update')); } catch {}
+
+        const scansExhausted = (updatedUser.usageCount || 0) >= (updatedUser.maxScans || 5);
+        setQuotaStatus(prev => ({ ...(prev || {}), scansExhausted, updatedAt: new Date().toISOString(), jobsExhausted: prev?.jobsExhausted || false }));
+      }, user.id);
+
+      unsubJobs = subscribeToJobs((jobs) => {
+        const count = Array.isArray(jobs) ? jobs.length : 0;
+        const updatedUser = { ...user, jobCount: count };
+        updateUserInStorage(updatedUser);
+        setUser(updatedUser);
+        try { window.dispatchEvent(new Event('auth_update')); } catch {}
+
+        const jobsExhausted = (updatedUser.jobCount || 0) >= (updatedUser.maxJobs || 1);
+        setQuotaStatus(prev => ({ ...(prev || {}), jobsExhausted, updatedAt: new Date().toISOString(), scansExhausted: prev?.scansExhausted || false }));
+      }, user.id);
+    } catch (err) {
+      console.warn('Could not subscribe to remote candidate/job counts', err);
+    }
+
+    return () => {
+      try { unsubCandidates && unsubCandidates(); } catch {}
+      try { unsubJobs && unsubJobs(); } catch {}
+    };
+  }, [user?.id, user?.userType]);
 
   const login = (username: string, password: string): boolean => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -148,6 +230,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     updateUserInStorage(updatedUser);
     setUser(updatedUser);
     localStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+    // Notify other listeners (same-tab and other components)
+    try { window.dispatchEvent(new Event('auth_update')); } catch {}
+
+    // If we've reached the limit after incrementing, notify the user
+    if ((updatedUser.usageCount || 0) >= (updatedUser.maxScans || 5)) {
+      setQuotaStatus(prev => ({ ...(prev || {}), scansExhausted: true, updatedAt: new Date().toISOString(), jobsExhausted: prev?.jobsExhausted || false }));
+    }
     return true;
   };
 
@@ -168,6 +257,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     updateUserInStorage(updatedUser);
     setUser(updatedUser);
     localStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+    try { window.dispatchEvent(new Event('auth_update')); } catch {}
+
+    if ((updatedUser.jobCount || 0) >= (updatedUser.maxJobs || 1)) {
+      setQuotaStatus(prev => ({ ...(prev || {}), jobsExhausted: true, updatedAt: new Date().toISOString(), scansExhausted: prev?.scansExhausted || false }));
+    }
     return true;
   };
 
@@ -214,6 +308,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       hasReachedScanLimit,
       hasReachedJobLimit,
       getRemainingScans,
+      quotaStatus,
+      acknowledgeQuota: () => setQuotaStatus(null),
     }}>
       {children}
     </AuthContext.Provider>

@@ -45,7 +45,7 @@ export const TrialLimitModal = ({ open, onClose, type }: TrialLimitModalProps) =
 
           <div className="space-y-4">
             <p className="text-slate-600 leading-relaxed">
-              We hope you enjoyed the HireAxis experience! To unlock unlimited scans, multiple job postings, and use your own database, upgrade to Pro today.
+              We hope you enjoyed the Hire Force experience! To unlock unlimited scans, multiple job postings, and use your own database, upgrade to Pro today.
             </p>
 
             <div className="bg-emerald-50/70 rounded-2xl border border-emerald-100 p-6 text-left">
@@ -76,7 +76,7 @@ export const TrialLimitModal = ({ open, onClose, type }: TrialLimitModalProps) =
             <div className="flex flex-col gap-3 pt-4">
               <Button 
                 className="h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-base shadow-xl shadow-emerald-600/20 gap-2"
-                onClick={() => window.location.href = 'mailto:sales@hireaxis.com'}
+                onClick={() => window.location.href = 'mailto:sales@hireforce.com'}
               >
                 <Mail size={18} />
                 Contact Sales Team

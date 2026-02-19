@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 interface TrialStatusBarProps {
@@ -12,7 +13,8 @@ interface TrialStatusBarProps {
 }
 
 export const TrialStatusBar = ({ className }: TrialStatusBarProps) => {
-  const { isTrial, getRemainingScans, user } = useAuth();
+  const { isTrial, getRemainingScans, user, quotaStatus } = useAuth();
+  const navigate = useNavigate();
 
   if (!isTrial) return null;
 
@@ -77,6 +79,18 @@ export const TrialStatusBar = ({ className }: TrialStatusBarProps) => {
         {isExhausted && (
           <div className="text-xs text-slate-500 mt-2 font-medium text-center">
             Trial limit reached. Upgrade to continue.
+          </div>
+        )}
+
+        {/* Quick link to notifications when quota status present */}
+        {quotaStatus && (quotaStatus.scansExhausted || quotaStatus.jobsExhausted) && (
+          <div className="mt-3 flex justify-center">
+            <button
+              onClick={() => window.open('https://hireforce-amber.vercel.app/#get-started', '_blank')}
+              className="text-xs font-bold px-3 py-2 bg-white/90 border border-amber-100 rounded-full text-amber-700 hover:bg-amber-50"
+            >
+              Get Started Today
+            </button>
           </div>
         )}
       </div>

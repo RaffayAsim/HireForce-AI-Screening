@@ -18,9 +18,11 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { subscribeToJobs, subscribeToCandidates, Job, Candidate } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const TalentPool = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,11 +34,11 @@ const TalentPool = () => {
     const unsubscribeJobs = subscribeToJobs((updatedJobs) => {
       setJobs(updatedJobs);
       setLoading(false);
-    });
+    }, user?.id);
 
     const unsubscribeCandidates = subscribeToCandidates((updatedCandidates) => {
       setCandidates(updatedCandidates);
-    });
+    }, user?.id);
 
     return () => {
       unsubscribeJobs();

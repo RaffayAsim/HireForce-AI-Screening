@@ -26,19 +26,22 @@ const getN8NWebhookUrl = () => {
 };
 
 // Job API functions
-export const createJobInSupabase = async (data: any) => {
+export const createJobInSupabase = async (data: any, userId?: string) => {
   try {
+    const jobData = {
+      title: data.title,
+      description: data.description,
+      requirements: data.requirements,
+      location: data.location,
+      department: data.department,
+      salary: data.salary,
+      status: 'Active',
+      ...(userId && { user_id: userId }),
+    };
+
     const { data: newRecord, error } = await supabase
       .from('jobs')
-      .insert([{
-        title: data.title,
-        description: data.description,
-        requirements: data.requirements,
-        location: data.location,
-        department: data.department,
-        salary: data.salary,
-        status: 'Active',
-      }])
+      .insert([jobData])
       .select()
       .single();
 
@@ -66,18 +69,43 @@ export const fetchJobById = async (jobId: string) => {
   }
 };
 
-export const subscribeToJobs = (callback: (jobs: any[]) => void) => {
+export const subscribeToJobs = (callback: (jobs: any[]) => void, userId?: string) => {
   const fetchJobs = async () => {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('❌ Error fetching jobs:', error);
-      return;
+    try {
+      let query = supabase
+        .from('jobs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        // If user_id column doesn't exist, fetch all jobs as fallback
+        if (error.code === '42703' && error.message.includes('user_id')) {
+          console.warn('⚠️ user_id column not found, fetching all jobs without filter');
+          const { data: allData, error: fallbackError } = await supabase
+            .from('jobs')
+            .select('*')
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) {
+            console.error('❌ Error fetching jobs:', fallbackError);
+            return;
+          }
+          callback(allData || []);
+          return;
+        }
+        console.error('❌ Error fetching jobs:', error);
+        return;
+      }
+      callback(data || []);
+    } catch (err) {
+      console.error('❌ Exception fetching jobs:', err);
     }
-    callback(data || []);
   };
 
   fetchJobs();
@@ -95,18 +123,43 @@ export const subscribeToJobs = (callback: (jobs: any[]) => void) => {
 };
 
 // Candidate API functions
-export const subscribeToCandidates = (callback: (candidates: any[]) => void) => {
+export const subscribeToCandidates = (callback: (candidates: any[]) => void, userId?: string) => {
   const fetchCandidates = async () => {
-    const { data, error } = await supabase
-      .from('candidates')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('❌ Error fetching candidates:', error);
-      return;
+    try {
+      let query = supabase
+        .from('candidates')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        // If user_id column doesn't exist, fetch all candidates as fallback
+        if (error.code === '42703' && error.message.includes('user_id')) {
+          console.warn('⚠️ user_id column not found, fetching all candidates without filter');
+          const { data: allData, error: fallbackError } = await supabase
+            .from('candidates')
+            .select('*')
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) {
+            console.error('❌ Error fetching candidates:', fallbackError);
+            return;
+          }
+          callback(allData || []);
+          return;
+        }
+        console.error('❌ Error fetching candidates:', error);
+        return;
+      }
+      callback(data || []);
+    } catch (err) {
+      console.error('❌ Exception fetching candidates:', err);
     }
-    callback(data || []);
   };
 
   fetchCandidates();
@@ -123,7 +176,7 @@ export const subscribeToCandidates = (callback: (candidates: any[]) => void) => 
   };
 };
 
-export const createCandidateApplication = async (data: any) => {
+export const createCandidateApplication = async (data: any, userId?: string) => {
   try {
     let resumeUrl = null;
 
@@ -147,17 +200,20 @@ export const createCandidateApplication = async (data: any) => {
     }
 
     // Create candidate record
+    const candidateData = {
+      full_name: data.name,
+      email: data.email,
+      phone: data.phone,
+      linkedin: data.linkedin,
+      job_id: data.job_id,
+      resume_url: resumeUrl,
+      status: 'new',
+      ...(userId && { user_id: userId }),
+    };
+
     const { data: newCandidate, error } = await supabase
       .from('candidates')
-      .insert([{
-        full_name: data.name,
-        email: data.email,
-        phone: data.phone,
-        linkedin: data.linkedin,
-        job_id: data.job_id,
-        resume_url: resumeUrl,
-        status: 'new',
-      }])
+      .insert([candidateData])
       .select()
       .single();
 

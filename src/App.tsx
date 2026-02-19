@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import TrialRegistration from "./pages/TrialRegistration";
+import Notifications from "./pages/Notifications";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,11 @@ const AppRoutes = () => {
       <Route path="/settings" element={
         <ProtectedRoute>
           <Organization />
+        </ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <ProtectedRoute>
+          <Notifications />
         </ProtectedRoute>
       } />
       <Route path="/apply" element={<Apply />} />

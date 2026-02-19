@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { subscribeToJobs, subscribeToCandidates } from '@/lib/api';
 import { Candidate, Job } from '@/lib/supabase';
 import { useRole } from '@/contexts/RoleContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
   <Card className="glass-card rounded-2xl md:rounded-[2.5rem] overflow-hidden group hover:translate-y-[-4px] transition-all duration-500">
@@ -45,6 +46,7 @@ const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
 
 const Index = () => {
   const { isAdmin, isViewer } = useRole();
+  const { user } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,11 +58,11 @@ const Index = () => {
     const unsubscribeJobs = subscribeToJobs((updatedJobs) => {
       setJobs(updatedJobs);
       setLoading(false);
-    });
+    }, user?.id);
 
     const unsubscribeCandidates = subscribeToCandidates((updatedCandidates) => {
       setCandidates(updatedCandidates);
-    });
+    }, user?.id);
 
     return () => {
       unsubscribeJobs();

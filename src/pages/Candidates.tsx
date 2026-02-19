@@ -29,9 +29,11 @@ import { BulkActionsBar } from '@/components/candidates/BulkActionsBar';
 import { Candidate, Job } from '@/lib/supabase';
 import { subscribeToCandidates, subscribeToJobs } from '@/lib/api';
 import { useRole } from '@/contexts/RoleContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Candidates = () => {
   const { isAdmin, isViewer } = useRole();
+  const { user } = useAuth();
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -46,11 +48,11 @@ const Candidates = () => {
     const unsubscribeCandidates = subscribeToCandidates((updatedCandidates) => {
       setCandidates(updatedCandidates);
       setLoading(false);
-    });
+    }, user?.id);
 
     const unsubscribeJobs = subscribeToJobs((updatedJobs) => {
       setJobs(updatedJobs);
-    });
+    }, user?.id);
 
     return () => {
       unsubscribeCandidates();

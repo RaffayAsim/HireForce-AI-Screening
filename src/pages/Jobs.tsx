@@ -23,9 +23,11 @@ import { subscribeToJobs, subscribeToCandidates } from '@/lib/api';
 import { Job, Candidate } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { showSuccess } from '@/utils/toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Jobs = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,11 +40,11 @@ const Jobs = () => {
     const unsubscribeJobs = subscribeToJobs((updatedJobs) => {
       setJobs(updatedJobs);
       setLoading(false);
-    });
+    }, user?.id);
 
     const unsubscribeCandidates = subscribeToCandidates((updatedCandidates) => {
       setCandidates(updatedCandidates);
-    });
+    }, user?.id);
 
     return () => {
       unsubscribeJobs();
