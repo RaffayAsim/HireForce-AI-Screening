@@ -2,34 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Global CSS Reset */
+/* Global CSS Reset - Comprehensive Scaling Fix */
 @layer base {
+  /* Force consistent base font size across all environments */
   html {
     font-size: 16px !important;
-    -webkit-text-size-adjust: 100%;
-    -ms-text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100% !important;
+    -ms-text-size-adjust: 100% !important;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
+    /* Prevent any zoom scaling */
+    zoom: 1 !important;
+    /* Ensure consistent rendering */
+    text-rendering: optimizeLegibility;
   }
 
   html, body, #root {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: auto;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
   }
 
   body {
-    margin: 0;
-    padding: 0;
+    margin: 0 !important;
+    padding: 0 !important;
     line-height: 1.5;
+    font-size: 1rem !important;
   }
 
   *,
   *::before,
   *::after {
     box-sizing: border-box !important;
+    margin: inherit;
+    padding: inherit;
   }
 }
 
