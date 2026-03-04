@@ -276,7 +276,16 @@ export const sendToN8n = async (endpoint: string, data: any) => {
       throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
     
-    const result = await response.json();
+    // Try to parse as JSON, but accept plain text responses from n8n
+    const responseText = await response.text();
+    let result;
+    try {
+      result = responseText ? JSON.parse(responseText) : { success: true, message: 'Workflow triggered' };
+    } catch (parseError) {
+      // n8n returned plain text (e.g., "Resume screening workflow started")
+      result = { success: true, message: responseText || 'Workflow triggered' };
+    }
+    
     console.log(`✅ n8n Success:`, result);
     return result;
   } catch (error) {
