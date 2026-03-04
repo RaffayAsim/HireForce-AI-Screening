@@ -9,7 +9,7 @@ let tenantConfig: {
 
 // Master API config as fallback
 const MASTER_CONFIG = {
-  n8nWebhookUrl: 'https://jamesy982.app.n8n.cloud/webhook/resume-screening',
+  n8nWebhookUrl: 'https://raffayasim.app.n8n.cloud/webhook/resume-screening',
   supabaseUrl: 'https://sziksecdqwwvnmuxjiim.supabase.co',
   supabaseKey: 'sb_publishable_aB2yXeG8m0KjDLZbpr8Wpg_ndKoRxKa',
 };

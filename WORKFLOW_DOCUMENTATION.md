@@ -100,7 +100,7 @@ const { publicUrl } = supabase.storage.from('resumes').getPublicUrl(filePath)
 When candidate application is saved, `sendToN8n()` is called:
 
 ```typescript
-POST https://jamesy982.app.n8n.cloud/webhook/resume-screening
+POST https://raffayasim.app.n8n.cloud/webhook/resume-screening
 {
   "candidateId": "uuid-candidate-id",
   "jobId": "uuid-job-id",
