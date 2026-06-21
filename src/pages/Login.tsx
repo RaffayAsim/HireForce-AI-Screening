@@ -24,7 +24,7 @@ const Login = () => {
       if (user?.isAdmin) {
         navigate('/admin');
       } else {
-        navigate('/');
+        navigate('/dashboard');
       }
     }
   }, [isAuthenticated, user, navigate]);
@@ -39,7 +39,7 @@ const Login = () => {
       if (username.toLowerCase() === 'admin@vision.ai') {
         navigate('/admin');
       } else {
-        navigate('/');
+        navigate('/dashboard');
       }
     } else {
       showError('Invalid username or password');

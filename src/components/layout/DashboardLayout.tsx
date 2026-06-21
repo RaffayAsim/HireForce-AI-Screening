@@ -48,7 +48,7 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   
   const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', to: '/' },
+    { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard' },
     { icon: Briefcase, label: 'Jobs', to: '/jobs', warn: quotaStatus?.jobsExhausted },
     { icon: Users, label: 'Talent Pool', to: '/talent-pool' },
   ];
@@ -67,7 +67,7 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
       <aside className={`w-64 bg-white border-r border-gray-200 flex flex-col fixed h-screen z-20 transform transition-transform md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative}`}>
         {/* Logo */}
         <div className="p-4 border-b border-gray-200">
-          <Link to="/" className="flex items-center gap-2 group">
+          <Link to="/dashboard" className="flex items-center gap-2 group">
             <div className="w-10 h-10 bg-cyan-500 rounded flex items-center justify-center">
               <Building2 className="text-white" size={20} />
             </div>

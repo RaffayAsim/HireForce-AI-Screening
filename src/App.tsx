@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { RoleProvider } from "@/contexts/RoleContext";
+import Landing from "./pages/Landing";
 import Index from "./pages/Index";
 import Jobs from "./pages/Jobs";
 import JobDetails from "./pages/JobDetails";
@@ -30,7 +31,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }: { children: React.Re
   }
   
   if (requireAdmin && !isAdmin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   
   return <>{children}</>;
@@ -39,6 +40,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }: { children: React.Re
 const AppRoutes = () => {
   return (
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/trial" element={<TrialRegistration />} />
       <Route path="/admin" element={
@@ -46,7 +48,7 @@ const AppRoutes = () => {
           <Admin />
         </ProtectedRoute>
       } />
-      <Route path="/" element={
+      <Route path="/dashboard" element={
         <ProtectedRoute>
           <Index />
         </ProtectedRoute>
