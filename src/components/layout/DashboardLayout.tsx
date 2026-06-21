@@ -121,7 +121,7 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => {
                 <p className="text-xs text-orange-700">Don't worry — get 20% off your first month when you upgrade.</p>
               </div>
               <button
-                onClick={() => window.open('https://hireforce-amber.vercel.app/#get-started', '_blank')}
+                onClick={() => navigate('/#pricing')}
                 className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600"
               >
                 Upgrade Now

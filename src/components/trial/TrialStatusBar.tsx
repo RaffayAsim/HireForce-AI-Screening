@@ -86,7 +86,7 @@ export const TrialStatusBar = ({ className }: TrialStatusBarProps) => {
         {quotaStatus && (quotaStatus.scansExhausted || quotaStatus.jobsExhausted) && (
           <div className="mt-3 flex justify-center">
             <button
-              onClick={() => window.open('https://hireforce-amber.vercel.app/#get-started', '_blank')}
+              onClick={() => navigate('/#pricing')}
               className="text-xs font-bold px-3 py-2 bg-white/90 border border-amber-100 rounded-full text-amber-700 hover:bg-amber-50"
             >
               Get Started Today
