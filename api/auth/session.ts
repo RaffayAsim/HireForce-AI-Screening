@@ -256,6 +256,7 @@ export default async function handler(req: any, res: any) {
 
       // Reset failed attempts on success
       await clearFailedAttempts(sb, emailKey);
+      await clearFailedAttempts(sb, ipKey);
 
       // Issue signed server token
       const tenantId = recruiter.tenant_id || recruiter.id;

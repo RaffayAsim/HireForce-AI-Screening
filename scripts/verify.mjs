@@ -1086,7 +1086,10 @@ async function run() {
     // Blank resume -> 0% Unreadable
     const blankScreenRes = await fetch(`${BASE_URL}/api/screen-candidate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${r1Token}`
+      },
       body: JSON.stringify({
         resumeText: '',
         jobTitle: 'Software Engineer',
@@ -1102,7 +1105,10 @@ async function run() {
     const normalTextResume = 'Sara Ahmed is a Senior Operations Coordinator with 6 years of experience managing CRM databases, Salesforce pipelines, cross-functional logistics, Excel reporting, and stakeholder communication.';
     const normalScreenRes = await fetch(`${BASE_URL}/api/screen-candidate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${r1Token}`
+      },
       body: JSON.stringify({
         resumeText: normalTextResume,
         jobTitle: 'Sales Operations Coordinator',
@@ -1198,6 +1204,13 @@ async function run() {
         headers: { 'Authorization': `Bearer ${r1Token}` }
       });
     }
+
+    // Cleanup rate limit test records so test runner IP is not locked out
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await sb.from('candidates').delete().eq('user_id', 'sys_rate_limit');
+    } catch {}
 
     report(true, `Cleanup: Removed ${cleanCount} test candidates and ${cleanupJobIds.length} test jobs`);
   } catch (err) {
