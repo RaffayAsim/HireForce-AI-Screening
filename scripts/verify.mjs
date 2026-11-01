@@ -1074,6 +1074,13 @@ async function run() {
     }
     report(got429, 'Rate Limiting: 12 rapid wrong-password attempts triggers 429 Too Many Requests');
 
+    // Immediately clear rate limit guard records so subsequent requests from test IP are not throttled
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await sb.from('candidates').delete().eq('user_id', 'sys_rate_limit');
+    } catch {}
+
     // 3. R1 Google Integrations table lookup & Meet creation
     const r1IntCheck = await fetch(`${BASE_URL}/api/integrations`, {
       headers: { 'Authorization': `Bearer ${r1Token}` }
