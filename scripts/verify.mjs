@@ -46,8 +46,29 @@ function report(pass, name, details = '') {
 }
 
 function buildPdfWithText(text) {
-  const escaped = text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-  const stream = `BT\n/F1 12 Tf\n50 700 Td\n(${escaped}) Tj\nET`;
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = [];
+  for (const w of words) {
+    cur.push(w);
+    if (cur.length >= 6) {
+      lines.push(cur.join(' '));
+      cur = [];
+    }
+  }
+  if (cur.length > 0) lines.push(cur.join(' '));
+
+  let stream = 'BT\n/F1 10 Tf\n50 750 Td\n14 TL\n';
+  for (let i = 0; i < lines.length; i++) {
+    const esc = lines[i].replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    if (i === 0) {
+      stream += `(${esc}) Tj\n`;
+    } else {
+      stream += `T* (${esc}) Tj\n`;
+    }
+  }
+  stream += 'ET';
+
   const streamLen = Buffer.byteLength(stream, 'utf8');
   let out = `%PDF-1.4\n`;
   const offsets = [];
