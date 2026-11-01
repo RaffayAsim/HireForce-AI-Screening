@@ -47,7 +47,7 @@ function report(pass, name, details = '') {
 
 // Track created test artifacts for cleanup
 const cleanupCandidateIds = [];
-let cleanupJobId = null;
+const cleanupJobIds = [];
 
 async function run() {
   console.log('====================================================');
@@ -380,7 +380,7 @@ async function run() {
   // CHECK 5: Scoring Rubric & Caps
   console.log('\n--- CHECK 5: Role-Specific Scoring & Idempotency ---');
   let testJobId = `job-verify-${Date.now()}`;
-  cleanupJobId = testJobId;
+  cleanupJobIds.push(testJobId);
 
   try {
     // Create test job
@@ -509,6 +509,110 @@ async function run() {
     }
   } catch (err) {
     report(false, 'Scoring checks failed', err.message);
+  }
+
+  // CHECK 5.1: Scoring Consistency Across 3 Different Job Wordings
+  console.log('\n--- CHECK 5.1: Scoring Consistency Across 3 Different Job Wordings ---');
+  try {
+    const wordingVariants = [
+      {
+        name: 'Short Bullets',
+        title: 'Sales Operations Coordinator (Bullets)',
+        description: '- Manage CRM workflows and pipelines\n- Advanced Excel modeling and data reporting\n- Lead generation strategy and pipeline hygiene',
+        requirements: 'CRM (HubSpot/Salesforce), Advanced Excel, Lead Generation, Reporting Dashboards.'
+      },
+      {
+        name: 'Long Paragraph',
+        title: 'Sales Operations Coordinator (Narrative)',
+        description: 'We are seeking an experienced Sales Operations Coordinator to join our revenue team. You will be responsible for orchestrating CRM pipelines, ensuring high-quality lead generation tracking, and constructing executive reporting dashboards. You will spend significant time in Excel creating models and synthesizing conversion metrics. While familiarity with modern tech stacks or SQL querying might be helpful as an occasional bonus, core day-to-day work centers entirely on CRM administration, lead generation tracking, and spreadsheet rigor.',
+        requirements: 'Extensive background in CRM administration (Salesforce or HubSpot), proficiency in Excel modeling and pivot tables, proven track record in lead generation tracking and operational reporting.'
+      },
+      {
+        name: 'Requirements Only',
+        title: 'Sales Operations Coordinator (Requirements Only)',
+        description: 'Sales Operations opening.',
+        requirements: 'Must have: CRM experience, advanced Excel, lead generation, sales reporting.'
+      }
+    ];
+
+    const wordingTestResumes = [
+      {
+        roleType: 'React Dev',
+        name: 'React Dev Wording Test',
+        email: 'react.wording@example.com',
+        resume: 'Senior React Developer with 5 years experience in React, Next.js, Node.js, TypeScript, Tailwind CSS, SQL, component architecture, and web applications.',
+        min: 30,
+        max: 45
+      },
+      {
+        roleType: 'Ops Specialist',
+        name: 'Ops Specialist Wording Test',
+        email: 'ops.wording@example.com',
+        resume: 'Sales Operations Specialist with hands-on mastery in HubSpot, Salesforce, CRM pipelines, advanced Excel, spreadsheet modeling, lead generation, and reporting dashboards.',
+        min: 70,
+        max: 90
+      },
+      {
+        roleType: 'Marketing Specialist',
+        name: 'Marketing Specialist Wording Test',
+        email: 'mkt.wording@example.com',
+        resume: 'Marketing Coordinator with experience in social media management, brand marketing, copywriting, digital campaigns, and community building.',
+        min: 20,
+        max: 40
+      }
+    ];
+
+    for (const variant of wordingVariants) {
+      const vJobId = `job-wording-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      cleanupJobIds.push(vJobId);
+
+      const createRes = await fetch(`${BASE_URL}/api/jobs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${r1Token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: vJobId,
+          title: variant.title,
+          description: variant.description,
+          requirements: variant.requirements,
+          department: 'Sales Operations',
+          location: 'Remote',
+          status: 'Active'
+        })
+      });
+
+      for (const cand of wordingTestResumes) {
+        const cId = `cand-wording-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        cleanupCandidateIds.push(cId);
+
+        const screenRes = await fetch(`${BASE_URL}/api/screen-candidate`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${r1Token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            candidateId: cId,
+            candidateName: cand.name,
+            candidateEmail: cand.email,
+            jobId: vJobId,
+            jobTitle: variant.title,
+            jobDescription: `${variant.description} ${variant.requirements}`,
+            resumeText: cand.resume,
+            userId: R1_TENANT
+          })
+        });
+        const sData = await screenRes.json();
+        const score = sData.screening?.score ?? -1;
+        const pass = score >= cand.min && score <= cand.max;
+        report(pass,
+          `Wording [${variant.name}] -> ${cand.roleType}: scored ${score}% (expected ${cand.min}-${cand.max}%)`);
+      }
+    }
+  } catch (err) {
+    report(false, 'Job wording consistency checks failed', err.message);
   }
 
   // CHECK 6: Submission Speed Under 3000ms
@@ -886,6 +990,32 @@ async function run() {
     report(false, 'Integrations and isolation check failed', err.message);
   }
 
+  // CHECK 8.6: Zero hard-coded R1 seeds in api & src (grep verification)
+  console.log('\n--- CHECK 8.6: Zero Hard-coded R1 Seed in api & src (grep verification) ---');
+  try {
+    let seedMatches = [];
+    function checkSeedInDir(dir) {
+      if (!fs.existsSync(dir)) return;
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const ent of entries) {
+        const full = path.join(dir, ent.name);
+        if (ent.isDirectory()) {
+          checkSeedInDir(full);
+        } else if (ent.isFile()) {
+          const content = fs.readFileSync(full, 'utf8');
+          if (/(132806be|b7ea940c|raffay\.asim6)/i.test(content)) {
+            seedMatches.push(full);
+          }
+        }
+      }
+    }
+    checkSeedInDir(path.resolve(__dirname, '../api'));
+    checkSeedInDir(path.resolve(__dirname, '../src'));
+    report(seedMatches.length === 0, 'No hardcoded R1 seed (132806be|b7ea940c|raffay.asim6) in api or src', `matches: ${seedMatches.length}`);
+  } catch (err) {
+    report(false, 'Hardcoded seed check failed', err.message);
+  }
+
   // CHECK 9: Cleanup
   console.log('\n--- CHECK 9: Cleanup of Test Entities ---');
   try {
@@ -898,14 +1028,14 @@ async function run() {
       cleanCount++;
     }
 
-    if (cleanupJobId) {
-      await fetch(`${BASE_URL}/api/jobs?id=${cleanupJobId}`, {
+    for (const jId of cleanupJobIds) {
+      await fetch(`${BASE_URL}/api/jobs?id=${jId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${r1Token}` }
       });
     }
 
-    report(true, `Cleanup: Removed ${cleanCount} test candidates and test job (${cleanupJobId})`);
+    report(true, `Cleanup: Removed ${cleanCount} test candidates and ${cleanupJobIds.length} test jobs`);
   } catch (err) {
     report(false, 'Cleanup failed', err.message);
   }

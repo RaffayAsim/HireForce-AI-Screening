@@ -208,6 +208,27 @@ export async function evaluateCandidate(data: any) {
     const missingJobSkills = jobRequiredSkills.filter(k => !hasSkill(resumeLower, k));
     const matchRatio = jobRequiredSkills.length > 0 ? (matchedJobSkills.length / jobRequiredSkills.length) : 0;
 
+    const isTechRole = isAutomationRole || isDataScienceRole ||
+      /\b(developer|software|engineer|frontend|backend|full\s*stack|devops|architect|programmer)\b/i.test(cleanRole);
+
+    const genericTechSkills = new Set([
+      "sql", "react", "next.js", "node.js", "typescript", "javascript", "vue", "angular",
+      "html", "css", "tailwind", "rest apis", "graphql", "postgresql", "mysql", "mongodb",
+      "aws", "docker", "git", "python", "pandas", "numpy", "pytorch", "tensorflow", "scikit-learn"
+    ]);
+
+    // For non-technical roles, domain must-haves are non-generic tech skills (e.g. crm, excel, lead generation, salesforce, hubspot)
+    // Generic tech skills (sql, react, next.js) must not count as partial matches for non-technical role must-haves
+    const domainMustHaves = isTechRole
+      ? jobRequiredSkills
+      : jobRequiredSkills.filter(k => !genericTechSkills.has(k) && k !== "dashboard");
+
+    const matchedMustHaves = domainMustHaves.filter(k => hasSkill(resumeLower, k));
+    const missingMustHaves = domainMustHaves.filter(k => !hasSkill(resumeLower, k));
+    const domainMatchRatio = domainMustHaves.length > 0
+      ? (matchedMustHaves.length / domainMustHaves.length)
+      : matchRatio;
+
     let screeningResult: any = null;
     let usedProvider = "deterministic-engine";
 
@@ -315,7 +336,12 @@ export async function evaluateCandidate(data: any) {
     // Post-process OpenRouter results to enforce must-have cap and engine tag (FIX 2)
     if (screeningResult && typeof screeningResult.score === "number") {
       if (!isAutomationRole && jobRequiredSkills.length > 0) {
-        if (matchRatio < 0.5 && screeningResult.score > 55) {
+        if (!isTechRole && domainMustHaves.length > 0 && matchedMustHaves.length === 0) {
+          // Zero must-have matches for non-technical role: land in 30-45 (38 if tech background, 28 if unrelated)
+          screeningResult.score = allDetected.length >= 1 ? 38 : 28;
+          screeningResult.fit_level = "Needs Review";
+          screeningResult.recommendation = allDetected.length >= 1 ? "Review Profile" : "Do Not Advance";
+        } else if (matchRatio < 0.5 && screeningResult.score > 55) {
           screeningResult.score = Math.min(52, Math.round(40 + (matchRatio * 20)));
           if (screeningResult.score <= 55 && screeningResult.fit_level === "Strong Match") {
             screeningResult.fit_level = "Potential Match";
@@ -434,76 +460,103 @@ export async function evaluateCandidate(data: any) {
       } else {
         // Dynamic evaluation for non-automation roles (e.g. Sales Operations, Marketing Operations, Customer Success)
         if (jobRequiredSkills.length > 0) {
-          const matchRatio = matchedJobSkills.length / jobRequiredSkills.length;
-          // Apply the 55% cap ONLY when a candidate is missing most must-haves (< 50% match) (FIX 2)
-          const isMissingMost = matchRatio < 0.5;
-
-          // Bonus from related technical/analytical background (up to 8 points)
-          const relatedExpBonus = Math.min(8, Math.round(allDetected.length * 1.5));
-
-          if (matchRatio >= 0.75) {
-            // Excellent match (e.g. 3/4 or 4/4) -> 82 - 94
-            baseScore = Math.min(94, Math.round(80 + (matchRatio * 10) + relatedExpBonus));
-            fit = "Strong Match";
-            recommendation = "Advance to Interview";
-            strengths = [
-              `Demonstrated proficiency in ${matchedJobSkills.slice(0, 3).join(", ")} matching ${role} core requirements.`,
-              `Strong domain alignment covering ${Math.round(matchRatio * 100)}% of required competencies.`
-            ];
-            interviewQuestions = [
-              `Discuss your hands-on experience using ${matchedJobSkills[0]} in your recent work.`,
-              `How do you measure success and optimize deliverables in a ${role} role?`
-            ];
-          } else if (!isMissingMost) {
-            // Solid match (50% - 74% match, e.g. 2/4) -> NOT missing most must-haves -> 66 - 78
-            baseScore = Math.min(82, Math.round(62 + (matchRatio * 16) + relatedExpBonus));
-            fit = "Potential Match";
-            recommendation = "Schedule Screen";
-            strengths = [
-              `Solid alignment in ${matchedJobSkills.join(", ")}.`,
-              missingJobSkills.length > 0 ? `Growth areas in secondary requirements: ${missingJobSkills.slice(0, 2).join(", ")}.` : `Practical match for position requirements.`
-            ];
-            interviewQuestions = [
-              `Walk through your workflow using ${matchedJobSkills[0]}.`,
-              `How do you handle deliverables involving ${missingJobSkills[0] || 'core operations'}?`
-            ];
-          } else if (matchedJobSkills.length >= 1) {
-            // Missing most must-haves (< 50% match, e.g. 1/4) -> Strictly CAPPED at <= 55%
-            baseScore = Math.min(52, Math.round(40 + (matchRatio * 20) + Math.min(5, relatedExpBonus)));
-            fit = "Potential Match";
-            recommendation = "Review Profile";
-            strengths = [
-              `Familiarity with ${matchedJobSkills.join(", ")}.`,
-              `Missing most must-have core skills: No verified experience in ${missingJobSkills.slice(0, 3).join(", ")}.`
-            ];
-            interviewQuestions = [
-              `How would you adapt your current skillset to master ${missingJobSkills[0]}?`,
-              `Describe your experience handling key workflows for ${role}.`
-            ];
-          } else {
-            // 0 matched job skills
+          // If non-technical role and 0 domain must-haves matched:
+          if (!isTechRole && domainMustHaves.length > 0 && matchedMustHaves.length === 0) {
+            // A resume with zero must-have matches should land in 30-45 regardless of description wording
             if (allDetected.length >= 1) {
-              baseScore = Math.min(42, 32 + Math.min(6, allDetected.length * 2));
+              baseScore = 38;
               fit = "Needs Review";
               recommendation = "Review Profile";
               strengths = [
-                `General technical competencies detected (${allDetected.slice(0, 3).join(", ")}), but lacks required domain skills for ${role}.`,
-                missingJobSkills.length > 0 ? `Missing required competencies: ${missingJobSkills.slice(0, 4).join(", ")}.` : `Skill gap with position requirements.`
+                `Technical background detected (${allDetected.slice(0, 3).join(", ")}), but lacks required domain must-haves for ${role}.`,
+                missingMustHaves.length > 0 ? `Missing primary domain qualifications: ${missingMustHaves.slice(0, 3).join(", ")}.` : `Skill gap with position requirements.`
               ];
               interviewQuestions = [
-                `Assess candidate's ability to transition into ${role}.`
+                `Assess candidate's ability to transition from technical development to ${role}.`
               ];
             } else {
               baseScore = 28;
               fit = "Unqualified";
               recommendation = "Do Not Advance";
               strengths = [
-                `Resume does not demonstrate required skills for ${role}.`,
-                missingJobSkills.length > 0 ? `Missing required competencies: ${missingJobSkills.slice(0, 4).join(", ")}.` : `General skill mismatch with position requirements.`
+                `Resume lacks required domain qualifications and core must-haves for ${role}.`
               ];
               interviewQuestions = [
-                "Candidate profile does not match role requirements."
+                `Candidate profile does not match role requirements.`
               ];
+            }
+          } else {
+            const effectiveMatchRatio = !isTechRole && domainMustHaves.length > 0 ? domainMatchRatio : matchRatio;
+            const effectiveMatched = !isTechRole && domainMustHaves.length > 0 ? matchedMustHaves : matchedJobSkills;
+            const effectiveMissing = !isTechRole && domainMustHaves.length > 0 ? missingMustHaves : missingJobSkills;
+
+            const isMissingMost = effectiveMatchRatio < 0.5;
+            const relatedExpBonus = Math.min(8, Math.round(allDetected.length * 1.5));
+
+            if (effectiveMatchRatio >= 0.75) {
+              // Excellent match (e.g. 3/4 or 4/4) -> 82 - 94
+              baseScore = Math.min(94, Math.round(80 + (effectiveMatchRatio * 10) + relatedExpBonus));
+              fit = "Strong Match";
+              recommendation = "Advance to Interview";
+              strengths = [
+                `Demonstrated proficiency in ${effectiveMatched.slice(0, 3).join(", ")} matching ${role} core requirements.`,
+                `Strong domain alignment covering ${Math.round(effectiveMatchRatio * 100)}% of required competencies.`
+              ];
+              interviewQuestions = [
+                `Discuss your hands-on experience using ${effectiveMatched[0]} in your recent work.`,
+                `How do you measure success and optimize deliverables in a ${role} role?`
+              ];
+            } else if (!isMissingMost) {
+              // Solid match (50% - 74% match, e.g. 2/4) -> NOT missing most must-haves -> 66 - 78
+              baseScore = Math.min(82, Math.round(62 + (effectiveMatchRatio * 16) + relatedExpBonus));
+              fit = "Potential Match";
+              recommendation = "Schedule Screen";
+              strengths = [
+                `Solid alignment in ${effectiveMatched.join(", ")}.`,
+                effectiveMissing.length > 0 ? `Growth areas in secondary requirements: ${effectiveMissing.slice(0, 2).join(", ")}.` : `Practical match for position requirements.`
+              ];
+              interviewQuestions = [
+                `Walk through your workflow using ${effectiveMatched[0]}.`,
+                `How do you handle deliverables involving ${effectiveMissing[0] || 'core operations'}?`
+              ];
+            } else if (effectiveMatched.length >= 1) {
+              // Missing most must-haves (< 50% match, e.g. 1/4) -> Strictly CAPPED at <= 55%
+              baseScore = Math.min(52, Math.round(40 + (effectiveMatchRatio * 20) + Math.min(5, relatedExpBonus)));
+              fit = "Potential Match";
+              recommendation = "Review Profile";
+              strengths = [
+                `Familiarity with ${effectiveMatched.join(", ")}.`,
+                `Missing most must-have core skills: No verified experience in ${effectiveMissing.slice(0, 3).join(", ")}.`
+              ];
+              interviewQuestions = [
+                `How would you adapt your current skillset to master ${effectiveMissing[0]}?`,
+                `Describe your experience handling key workflows for ${role}.`
+              ];
+            } else {
+              // 0 matched job skills
+              if (allDetected.length >= 1) {
+                baseScore = 38;
+                fit = "Needs Review";
+                recommendation = "Review Profile";
+                strengths = [
+                  `General technical competencies detected (${allDetected.slice(0, 3).join(", ")}), but lacks required domain skills for ${role}.`,
+                  missingJobSkills.length > 0 ? `Missing required competencies: ${missingJobSkills.slice(0, 4).join(", ")}.` : `Skill gap with position requirements.`
+                ];
+                interviewQuestions = [
+                  `Assess candidate's ability to transition into ${role}.`
+                ];
+              } else {
+                baseScore = 28;
+                fit = "Unqualified";
+                recommendation = "Do Not Advance";
+                strengths = [
+                  `Resume does not demonstrate required skills for ${role}.`,
+                  missingJobSkills.length > 0 ? `Missing required competencies: ${missingJobSkills.slice(0, 4).join(", ")}.` : `General skill mismatch with position requirements.`
+                ];
+                interviewQuestions = [
+                  "Candidate profile does not match role requirements."
+                ];
+              }
             }
           }
         } else {

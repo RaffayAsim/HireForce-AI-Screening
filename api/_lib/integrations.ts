@@ -15,42 +15,8 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://fobfgvmwfzoxzzcheu
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvYmZndm13ZnpveHp6Y2hldXNtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzIxMzE2MCwiZXhwIjoyMTA4Nzg5MTYwfQ.WwWjdxSzQTdWIeMzb8HrtA6mTlB595mUEn_0M8zVWCE";
 const sb = createClient(supabaseUrl, supabaseKey);
 
-// In-memory fallback / cache ensuring R1 (tenant-1793401234436) stays connected
-const memoryIntegrations = new Map<string, IntegrationRow>([
-  [
-    "tenant-1793401234436:google:calendar",
-    {
-      id: "migrated-r1-google-calendar",
-      tenant_id: "tenant-1793401234436",
-      provider: "google",
-      service: "calendar",
-      connection_id: "132806be-8d06-4b3f-a45a-75e4009e9714",
-      account_email: "raffay.asim6@gmail.com",
-    }
-  ],
-  [
-    "tenant-1793401234436:google:meeting",
-    {
-      id: "migrated-r1-google-meeting",
-      tenant_id: "tenant-1793401234436",
-      provider: "google",
-      service: "meeting",
-      connection_id: "132806be-8d06-4b3f-a45a-75e4009e9714",
-      account_email: "raffay.asim6@gmail.com",
-    }
-  ],
-  [
-    "tenant-1793401234436:google:mail",
-    {
-      id: "migrated-r1-google-mail",
-      tenant_id: "tenant-1793401234436",
-      provider: "google",
-      service: "mail",
-      connection_id: "b7ea940c-efcc-47c0-9247-31ece8ca7eb0",
-      account_email: "raffay.asim6@gmail.com",
-    }
-  ],
-]);
+// In-memory cache for fast lookups across function invocations
+const memoryIntegrations = new Map<string, IntegrationRow>();
 
 export async function getIntegrations(tenantId: string): Promise<IntegrationRow[]> {
   if (!tenantId) return [];
@@ -62,13 +28,18 @@ export async function getIntegrations(tenantId: string): Promise<IntegrationRow[
       .eq("tenant_id", tenantId);
 
     if (!error && Array.isArray(data) && data.length > 0) {
+      // cache in memory
+      for (const row of data as IntegrationRow[]) {
+        const key = `${row.tenant_id}:${row.provider}:${row.service}`;
+        memoryIntegrations.set(key, row);
+      }
       return data as IntegrationRow[];
     }
   } catch {}
 
-  // Fallback to memory map
+  // Fallback to memory map if query fails
   const results: IntegrationRow[] = [];
-  for (const [key, val] of memoryIntegrations.entries()) {
+  for (const [_, val] of memoryIntegrations.entries()) {
     if (val.tenant_id === tenantId) {
       results.push(val);
     }
@@ -93,7 +64,10 @@ export async function getIntegration(
       .maybeSingle();
 
     if (!error && data) {
-      return data as IntegrationRow;
+      const row = data as IntegrationRow;
+      const key = `${tenantId}:${provider}:${service}`;
+      memoryIntegrations.set(key, row);
+      return row;
     }
   } catch {}
 
@@ -115,11 +89,15 @@ export async function getIntegrationForService(
       .eq("service", service);
 
     if (!error && Array.isArray(data) && data.length > 0) {
+      for (const row of data as IntegrationRow[]) {
+        const key = `${row.tenant_id}:${row.provider}:${row.service}`;
+        memoryIntegrations.set(key, row);
+      }
       return data[0] as IntegrationRow;
     }
   } catch {}
 
-  for (const [key, val] of memoryIntegrations.entries()) {
+  for (const [_, val] of memoryIntegrations.entries()) {
     if (val.tenant_id === tenantId && val.service === service) {
       return val;
     }
@@ -188,4 +166,3 @@ export async function deleteIntegration(
     await query;
   } catch {}
 }
-
