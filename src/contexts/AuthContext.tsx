@@ -21,6 +21,7 @@ export interface TenantUser {
   fullName?: string;
   phone?: string;
   email?: string;
+  city?: string;
   // Trial usage tracking
   usageCount?: number;
   jobCount?: number;

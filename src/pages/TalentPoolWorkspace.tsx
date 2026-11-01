@@ -145,7 +145,7 @@ const TalentPoolWorkspace = () => {
     if (!scheduleCandidate) return;
 
     setIsScheduling(true);
-    const candidateJob = jobs.find(j => j.id === scheduleCandidate.job_id);
+    const candidateJob = allJobs.find(j => j.id === scheduleCandidate.job_id);
     const acc = getConnectedAccount(user?.id);
     const hostRecruiter = acc?.email || user?.email || 'recruiter@hireforce.ai';
 
@@ -194,7 +194,7 @@ const TalentPoolWorkspace = () => {
           candidate_id: scheduleCandidate.id,
           candidate_name: scheduleCandidate.full_name,
           candidate_email: scheduleCandidate.email,
-          job_title: jobs?.find(j => j.id === scheduleCandidate.job_id)?.title || job?.title || 'Position',
+          job_title: allJobs?.find(j => j.id === scheduleCandidate.job_id)?.title || job?.title || 'Position',
           company_name: user?.companyName || 'HireForce',
           round_type: 'Technical Round',
           meeting_format: scheduleFormat === 'teams' ? 'Microsoft Teams' : (scheduleFormat === 'phone' ? 'Phone Interview' : (scheduleFormat === 'physical' ? 'Physical On-site' : 'Google Meet')),
@@ -1291,7 +1291,7 @@ const TalentPoolWorkspace = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Role:</span>
-                  <span className="text-zinc-800">{jobs.find(j => j.id === scheduleCandidate.job_id)?.title || 'Evaluated Position'}</span>
+                  <span className="text-zinc-800">{allJobs.find(j => j.id === scheduleCandidate.job_id)?.title || 'Evaluated Position'}</span>
                 </div>
               </div>
 

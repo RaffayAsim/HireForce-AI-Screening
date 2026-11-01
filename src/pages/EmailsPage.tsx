@@ -58,6 +58,7 @@ import {
   setDefaultEmailAccount,
   EMAIL_TEMPLATES,
   EmailThread,
+  EmailMessage,
   EmailAccount,
   EmailProvider
 } from '@/lib/emailService';

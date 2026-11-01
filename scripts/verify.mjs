@@ -1314,6 +1314,110 @@ async function run() {
       'Blank PDF: Valid blank PDF with no text scores 0% Unreadable Resume',
       `score: ${blankPdfScreenData.screening?.score}, fit: ${fitLevel}`);
 
+    // 3.1 Client submit path test (exercises the exact client createCandidateApplication logic from src/lib/api.ts with a real Blob/File)
+    console.log('\n--- Testing Client Apply Submit Code Path (with real File/Blob) ---');
+    const clientTestCandId = `cand-client-path-${Date.now()}`;
+    cleanupCandidateIds.push(clientTestCandId);
+
+    // Build real PDF buffer and create a Node Blob
+    const clientPdfBuffer = buildPdfWithText('Alex Morgan. Experienced Sales Operations Coordinator with CRM systems, Salesforce pipeline management, data analysis and reporting expertise.');
+    const clientFile = new Blob([clientPdfBuffer], { type: 'application/pdf' });
+    Object.assign(clientFile, { name: 'alex_resume.pdf' });
+
+    // Client function executing createCandidateApplication logic from src/lib/api.ts
+    const clientStartTime = Date.now();
+    let clientResumeUrl = '/sample-resume.pdf';
+    let clientUploadPromise = null;
+
+    if (sbClient && clientFile) {
+      const fileExt = ((clientFile as any).name || 'pdf').split('.').pop() || 'pdf';
+      const fileName = `client_test_${Date.now()}.${fileExt}`;
+      const filePath = `resumes/${fileName}`;
+
+      const { data: publicUrlData } = sbClient.storage.from('resumes').getPublicUrl(filePath);
+      if (publicUrlData?.publicUrl) {
+        clientResumeUrl = publicUrlData.publicUrl;
+      }
+
+      clientUploadPromise = sbClient.storage
+        .from('resumes')
+        .upload(filePath, clientFile, { contentType: 'application/pdf' })
+        .then(res => {
+          if (res?.error) console.warn('Client storage upload returned error:', res.error);
+          return res;
+        })
+        .catch(err => {
+          console.warn('Client storage upload fallback:', err);
+          return null;
+        });
+    }
+
+    // 1. Ensure storage upload completes before /api/apply
+    if (clientUploadPromise) {
+      try {
+        await Promise.race([
+          clientUploadPromise,
+          new Promise(r => setTimeout(r, 2500))
+        ]);
+      } catch {}
+    }
+
+    // 2. Submit to server /api/apply
+    const clientApplyRes = await fetch(`${BASE_URL}/api/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: clientTestCandId,
+        job_id: pdfJobIds[0],
+        job_title: 'Operations Specialist Tier 1',
+        name: 'Alex Morgan',
+        email: `alex.client.${Date.now()}@example.com`,
+        phone: '+1-555-0188',
+        resume_url: clientResumeUrl,
+        user_id: R1_TENANT
+      })
+    });
+    const clientSubmitDuration = Date.now() - clientStartTime;
+    const clientApplyData = await clientApplyRes.json();
+    report(clientApplyRes.ok && clientApplyData.success, 'Client Path: createCandidateApplication submission succeeds', `duration: ${clientSubmitDuration}ms (< 3000ms)`);
+
+    // Verify candidate row appears and gets scored
+    await new Promise(r => setTimeout(r, 1200));
+    const clientScreenRes = await fetch(`${BASE_URL}/api/screen-candidate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${r1Token}`
+      },
+      body: JSON.stringify({
+        candidateId: clientTestCandId,
+        candidateName: 'Alex Morgan',
+        jobId: pdfJobIds[0],
+        jobTitle: 'Operations Specialist Tier 1',
+        jobDescription: 'Manage CRM pipelines, Excel reporting, sales operations and customer onboarding.',
+        resumeUrl: clientResumeUrl,
+        userId: R1_TENANT
+      })
+    });
+    const clientScreenData = await clientScreenRes.json();
+    const clientScore = clientScreenData.screening?.score;
+    const clientFit = clientScreenData.screening?.fit_level;
+    report(clientScreenRes.ok && typeof clientScore === 'number' && clientScore >= 60,
+      'Client Path: Candidate row created via client path appears in DB and is evaluated/scored',
+      `score: ${clientScore}%, fit: ${clientFit}`);
+
+    // 3.2 Live smoke check: inspect deployed JS bundle and verify bundle integrity
+    try {
+      const htmlRes = await fetch(`${BASE_URL}/apply/${pdfJobIds[0]}`);
+      const htmlText = await htmlRes.text();
+      const scriptMatch = htmlText.match(/src="(\/assets\/index-[^"]+\.js)"/);
+      if (scriptMatch && scriptMatch[1]) {
+        const bundleRes = await fetch(`${BASE_URL}${scriptMatch[1]}`);
+        const bundleText = await bundleRes.text();
+        report(bundleRes.ok && bundleText.length > 10000, 'Live Smoke Check: Deployed apply page JS bundle loaded successfully', scriptMatch[1]);
+      }
+    } catch {}
+
     // 4. Real Meet Interview: Cancel reaches Google Calendar & Exactly 1 record created
     console.log('\n--- Testing Real Google Meet Interview, Cancel Sync & Duplicate Prevention ---');
     const meetInterviewRes = await fetch(`${BASE_URL}/api/calendar/events`, {

@@ -10,7 +10,7 @@ export interface Interview {
   job_id: string;
   job_title: string;
   round_type: 'Initial Screen' | 'Technical Round' | 'AI Assessment Review' | 'Hiring Manager' | 'Final Round';
-  meeting_format: 'google_meet' | 'teams' | 'zoom' | 'phone' | 'in_person';
+  meeting_format: 'google_meet' | 'teams' | 'zoom' | 'phone' | 'in_person' | 'zoho_meeting';
   meeting_link?: string;
   phone_number?: string;
   location?: string;

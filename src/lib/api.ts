@@ -355,13 +355,15 @@ export const createCandidateApplication = async (data: any, userId?: string) => 
     : `cand-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
 
   let resumeUrl = data.resume_file 
-    ? URL.createObjectURL(data.resume_file)
+    ? (typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(data.resume_file) : '/sample-resume.pdf')
     : '/sample-resume.pdf';
+
+  let uploadPromise: Promise<any> | null = null;
 
   // Try Supabase Storage upload with 3s timeout
   if (isSupabaseConfigured && data.resume_file) {
     try {
-      const fileExt = data.resume_file.name.split('.').pop() || 'pdf';
+      const fileExt = data.resume_file.name?.split('.').pop() || 'pdf';
       const fileName = `${data.name?.replace(/\s+/g, '_') || 'candidate'}-${Date.now()}.${fileExt}`;
       const filePath = `resumes/${fileName}`;
 
@@ -375,18 +377,27 @@ export const createCandidateApplication = async (data: any, userId?: string) => 
       uploadPromise = supabase.storage
         .from('resumes')
         .upload(filePath, data.resume_file)
-        .catch(storageErr => console.warn('Storage upload fallback:', storageErr));
+        .then(res => {
+          if (res?.error) {
+            console.warn('Storage upload returned error:', res.error);
+          }
+          return res;
+        })
+        .catch(storageErr => {
+          console.warn('Storage upload fallback:', storageErr);
+          return null;
+        });
     } catch (storageErr) {
       console.warn('Storage upload setup fallback:', storageErr);
     }
   }
 
-  // 1. Ensure storage upload completes (or timeout after 3.5s) before invoking server /api/apply
+  // 1. Ensure storage upload completes (or timeout after 2.5s) before invoking server /api/apply
   if (uploadPromise) {
     try {
       await Promise.race([
         uploadPromise,
-        new Promise(r => setTimeout(r, 3500))
+        new Promise(r => setTimeout(r, 2500))
       ]);
     } catch {}
   }

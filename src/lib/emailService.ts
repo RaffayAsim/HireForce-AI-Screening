@@ -30,7 +30,7 @@ export interface EmailThread {
   job_title: string;
   subject: string;
   from_account_id?: string;
-  status: 'Sent' | 'Delivered' | 'Replied';
+  status: 'Sent' | 'Delivered' | 'Replied' | 'Not delivered';
   last_updated: string;
   messages: EmailMessage[];
 }

@@ -387,7 +387,7 @@ const InterviewCalendar = () => {
 
       // Recruitment Automation: Interview Invitation & Meeting Link Details
       try {
-        const meetingDetails = meetingFormat === 'physical'
+        const meetingDetails = meetingFormat === 'in_person' || (meetingFormat as string) === 'physical'
           ? (locationAddress || 'Company Office')
           : (meetingFormat === 'phone' ? (phoneNumber || selectedCandidate.phone || 'Phone Call') : (created.meeting_link || finalLink));
 

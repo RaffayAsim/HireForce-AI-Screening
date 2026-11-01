@@ -374,6 +374,7 @@ export const triggerAutomation = async (
   // 2. Dispatch real email via connected Gmail / Outlook API
   let deliveryStatus: 'delivered' | 'sent' | 'skipped' | 'failed' = 'delivered';
   let deliveryError: string | undefined = undefined;
+  let resData: any = null;
 
   try {
     const targetUid = effectiveUserId || account?.user_id;
@@ -391,7 +392,7 @@ export const triggerAutomation = async (
         fromName: `${companyName} Recruiting Team`,
       }),
     });
-    const resData = await res.json().catch(() => ({}));
+    resData = await res.json().catch(() => ({}));
     if (resData.success && resData.delivered && (resData.id || resData.messageId)) {
       deliveryStatus = 'delivered';
     } else {

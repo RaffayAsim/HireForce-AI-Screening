@@ -123,7 +123,7 @@ export const saveConnectedAccount = (account: ConnectedRecruiterAccount, userId?
     microsoft: 'outlook',
     hostinger: 'hostinger',
     zoho: 'zoho',
-    apple: 'custom',
+    apple: 'smtp',
     custom: 'smtp',
   };
 
