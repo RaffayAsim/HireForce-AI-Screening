@@ -1,32 +1,33 @@
 import React from 'react';
 import { useRole } from '@/contexts/RoleContext';
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Eye, Lock } from 'lucide-react';
+import { Eye, ShieldCheck } from 'lucide-react';
 
 export const RoleSwitcher = () => {
   const { isAdmin, isViewer, setUserRole } = useRole();
 
   return (
-    <div className="p-4 bg-white/50 rounded-2xl border border-slate-200/60">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Role</span>
-        <div className="flex items-center gap-2">
-          {isViewer ? <Eye size={14} className="text-amber-500" /> : <Lock size={14} className="text-emerald-600" />}
-          <span className={`text-xs font-bold ${isViewer ? 'text-amber-600' : 'text-emerald-600'}`}>
-            {isAdmin ? 'Admin' : 'Viewer'}
+    <div className="p-2.5 bg-zinc-800/70 rounded-md border border-zinc-700/60 text-zinc-200">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Access Level</span>
+        <div className="flex items-center gap-1.5">
+          {isViewer ? <Eye size={12} className="text-amber-400" /> : <ShieldCheck size={12} className="text-emerald-400" />}
+          <span className={`text-[11px] font-medium ${isViewer ? 'text-amber-400' : 'text-emerald-400'}`}>
+            {isAdmin ? 'Full Admin' : 'Viewer'}
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="role-switch" className="text-xs text-zinc-300 cursor-pointer">
+          {isAdmin ? 'Admin Mode' : 'Read Only'}
+        </Label>
         <Switch 
+          id="role-switch"
           checked={isAdmin}
           onCheckedChange={(checked) => setUserRole(checked ? 'admin' : 'viewer')}
+          className="data-[state=checked]:bg-emerald-500 scale-90"
         />
-        <Label className="text-sm font-medium text-slate-700 cursor-pointer">
-          {isAdmin ? 'Full Access' : 'Read Only'}
-        </Label>
       </div>
     </div>
   );

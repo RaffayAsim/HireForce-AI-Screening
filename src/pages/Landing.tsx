@@ -3,8 +3,11 @@ import { useLocation } from "react-router-dom";
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 import Solutions from "@/components/landing/Solutions";
-import TechSection from "@/components/landing/TechSection";
+import DashboardPreview from "@/components/landing/DashboardPreview";
+import AutomationShowcase from "@/components/landing/AutomationShowcase";
 import Pricing from "@/components/landing/Pricing";
+import FAQ from "@/components/landing/FAQ";
+import CTASection from "@/components/landing/CTASection";
 import Footer from "@/components/landing/Footer";
 
 export default function Landing() {
@@ -23,12 +26,15 @@ export default function Landing() {
   }, [hash]);
 
   return (
-    <div className="bg-white min-h-screen text-gray-900 selection:bg-[#00F5A0]/30">
+    <div className="bg-white min-h-screen text-zinc-900 selection:bg-emerald-500/20 selection:text-emerald-900 font-sans">
       <Navbar />
       <Hero />
       <Solutions />
-      <TechSection />
+      <DashboardPreview />
+      <AutomationShowcase />
       <Pricing />
+      <FAQ />
+      <CTASection />
       <Footer />
     </div>
   );

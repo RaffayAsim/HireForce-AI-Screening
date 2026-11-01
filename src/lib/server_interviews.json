@@ -1,0 +1,20 @@
+[
+  {
+    "id": "int-1793284990745-z626",
+    "candidate_id": "8dac200c-67ff-4ae2-989a-f34bb3e18981",
+    "candidate_name": "Abdul Raffay",
+    "candidate_email": "raffay.asim6@gmail.com",
+    "job_id": "job-1793284650761-1upoya",
+    "job_title": "AI Developer",
+    "round_type": "Technical Round",
+    "meeting_format": "phone",
+    "meeting_link": "tel:+923332877852",
+    "phone_number": "+923332877852",
+    "date": "2026-10-30",
+    "time": "10:00",
+    "duration_minutes": 45,
+    "interviewer": "raffay.asim6@gmail.com",
+    "notes": "Phone interview with Abdul Raffay at +923332877852.",
+    "status": "Scheduled"
+  }
+]

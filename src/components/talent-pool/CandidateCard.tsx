@@ -155,7 +155,7 @@ export const CandidateCard = ({ candidate, onStatusChange, onClick }: CandidateC
           
           <div className="text-right">
             <div className={cn("text-2xl font-black", getScoreColor(candidate.screening_score))}>
-              {candidate.screening_score !== null ? `${candidate.screening_score}%` : '—'}
+              {typeof candidate.screening_score === 'number' && candidate.screening_score !== null ? `${candidate.screening_score}%` : 'Screening…'}
             </div>
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Match</div>
           </div>

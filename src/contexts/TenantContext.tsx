@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useAuth, TenantUser } from './AuthContext';
+import { useAuth, TenantUser } from '@/contexts/AuthContext';
 
 interface TenantContextType {
   currentTenant: TenantUser | null;

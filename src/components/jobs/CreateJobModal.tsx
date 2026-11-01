@@ -13,75 +13,135 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Sparkles, Loader2, Copy, Check, ExternalLink, HelpCircle } from 'lucide-react';
+import { Plus, Sparkles, Loader2, Copy, Check, ExternalLink, MapPin, HelpCircle, Trash2 } from 'lucide-react';
 import { showSuccess, showError } from '@/utils/toast';
 import { createJobInSupabase } from '@/lib/api';
+import { formatSalary } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { TrialLimitModal } from '@/components/trial/TrialLimitModal';
 
 const CreateJobModal = () => {
-  const { user, isViewer, isTrial, hasReachedJobLimit, incrementJobCount } = useAuth();
+  const { user, isTrial, hasReachedJobLimit, incrementJobCount } = useAuth();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [applyLink, setApplyLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const queryClient = useQueryClient();
+  const [showCustomCriteria, setShowCustomCriteria] = useState(false);
 
-  // Don't render if viewer
-  if (isViewer) return null;
+  // Workplace type and saved location states
+  const [workplaceType, setWorkplaceType] = useState<'remote' | 'hybrid' | 'physical'>('remote');
+  const [officeLocation, setOfficeLocation] = useState<string>(() => {
+    return localStorage.getItem('hireforce_saved_office_location') || '';
+  });
+  const [saveLocationAsDefault, setSaveLocationAsDefault] = useState<boolean>(true);
+  const [salaryInput, setSalaryInput] = useState<string>('');
+  const [clientCompanyName, setClientCompanyName] = useState<string>(() => user?.companyName || '');
+  const defaultCurrency = typeof window !== 'undefined' ? (localStorage.getItem('hireforce_default_currency') || 'PKR') : 'PKR';
+
+  // Custom screening questions states
+  const [screeningQuestions, setScreeningQuestions] = useState<string[]>([]);
+  const [newQuestionText, setNewQuestionText] = useState<string>('');
+
+  const queryClient = useQueryClient();
 
   const handleOpen = () => {
     if (isTrial && hasReachedJobLimit()) {
       setShowLimitModal(true);
       return;
     }
+    const saved = localStorage.getItem('hireforce_saved_office_location');
+    if (saved) {
+      setOfficeLocation(saved);
+    }
     setOpen(true);
   };
 
-  // Listen for global requests to open the create-job modal
   React.useEffect(() => {
     const handler = () => handleOpen();
     window.addEventListener('open_create_job', handler as EventListener);
     return () => window.removeEventListener('open_create_job', handler as EventListener);
   }, [isTrial, user]);
 
+  const handleAddQuestion = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (screeningQuestions.includes(trimmed)) {
+      showError("This question has already been added.");
+      return;
+    }
+    setScreeningQuestions(prev => [...prev, trimmed]);
+    setNewQuestionText('');
+  };
+
+  const handleRemoveQuestion = (idx: number) => {
+    setScreeningQuestions(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check limit again before submitting
     if (isTrial && hasReachedJobLimit()) {
       setShowLimitModal(true);
       return;
     }
     
     setLoading(true);
-    
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
+    const formElement = e.target as HTMLFormElement;
+    const formData = new FormData(formElement);
+    const title = (formData.get('title') as string || '').trim();
+    const company_name = (formData.get('company_name') as string || '').trim() || clientCompanyName.trim() || user?.companyName || 'HireForce';
+    const department = (formData.get('department') as string || '').trim();
+    const description = (formData.get('description') as string || '').trim();
+    const customReq = (formData.get('requirements') as string || '').trim();
+
+    // Determine final location string based on workplaceType
+    let resolvedLocation = 'Remote';
+    if (workplaceType === 'physical') {
+      resolvedLocation = officeLocation.trim() || 'On-site';
+    } else if (workplaceType === 'hybrid') {
+      resolvedLocation = officeLocation.trim() ? `Hybrid • ${officeLocation.trim()}` : 'Hybrid';
+    }
+
+    // Save office location for future jobs if user opted in
+    if (saveLocationAsDefault && officeLocation.trim() && (workplaceType === 'physical' || workplaceType === 'hybrid')) {
+      localStorage.setItem('hireforce_saved_office_location', officeLocation.trim());
+    }
+
+    // Auto-format salary with PKR prefix without requiring user to type it
+    const formattedSalary = salaryInput.trim() ? formatSalary(salaryInput.trim()) : '';
+
+    const payload = {
+      company_name,
+      title,
+      department: department || 'General',
+      location: resolvedLocation,
+      salary: formattedSalary,
+      description,
+      requirements: customReq || description,
+      screening_questions: screeningQuestions.join('\n'),
+    };
 
     try {
-      console.log('📝 Form data received:', data);
-      
-      const newRecord = await createJobInSupabase(data, user?.id);
+      const newRecord = await createJobInSupabase(payload, user?.id);
+      if (!newRecord || !newRecord.id) {
+        throw new Error("Failed to save job in database");
+      }
       const jobId = newRecord.id;
       const generatedLink = `${window.location.origin}/apply/${jobId}`;
       
-      console.log('✅ Job created successfully:', { jobId, generatedLink });
-      
-      // Increment job count for trial users
       if (isTrial) {
         incrementJobCount();
       }
       
       setApplyLink(generatedLink);
-      showSuccess("Job created successfully in Supabase!");
+      showSuccess("Job created successfully!");
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       
     } catch (error: any) {
-      console.error("❌ Job creation error:", error);
-      showError(error.message || "Failed to create job. Please try again.");
+      console.error("Job creation error:", error);
+      showError(error.message || "Failed to create job.");
     } finally {
       setLoading(false);
     }
@@ -91,6 +151,7 @@ const CreateJobModal = () => {
     if (applyLink) {
       navigator.clipboard.writeText(applyLink);
       setCopied(true);
+      showSuccess("Link copied to clipboard");
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -99,6 +160,9 @@ const CreateJobModal = () => {
     setOpen(false);
     setApplyLink(null);
     setCopied(false);
+    setSalaryInput('');
+    setScreeningQuestions([]);
+    setNewQuestionText('');
   };
 
   return (
@@ -107,142 +171,326 @@ const CreateJobModal = () => {
         <DialogTrigger asChild>
           <Button 
             onClick={handleOpen}
-            className="h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl px-8 shadow-xl shadow-emerald-600/20 gap-3 font-bold text-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="h-8 px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-all"
           >
-            <Plus size={22} />
-            Create New Job
+            <Plus size={14} />
+            <span>Create New Job</span>
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] rounded-[2rem] border-none shadow-2xl bg-white/95 backdrop-blur-2xl p-0 overflow-hidden">
-          <div className="h-3 bg-gradient-to-r from-emerald-500 to-teal-600" />
-          
+
+        <DialogContent className="sm:max-w-lg bg-white border border-zinc-200/90 rounded-xl p-6 shadow-lg max-h-[90vh] overflow-y-auto">
           {applyLink ? (
-            <div className="p-8 text-center">
-              <div className="w-20 h-20 bg-emerald-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6 ring-1 ring-emerald-500/20">
-                <Check className="text-emerald-600" size={40} />
+            <div className="text-center py-4 space-y-4">
+              <div className="w-10 h-10 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center mx-auto text-emerald-600">
+                <Check size={20} />
               </div>
-              <h2 className="text-2xl font-black text-[#0F172A] mb-3 tracking-tight">Job Successfully Created!</h2>
-              <p className="text-slate-500 text-sm font-medium mb-8">Your application link is ready to be shared with candidates.</p>
+              <div>
+                <h2 className="text-base font-bold text-zinc-900">Job Successfully Created</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Your public application link is ready to share with candidates.</p>
+              </div>
               
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-3 mb-8">
-                <div className="flex-1 truncate text-left font-mono text-xs text-slate-600 px-2">
+              <div className="bg-zinc-50 border border-zinc-200 rounded-md p-2.5 flex items-center gap-2">
+                <span className="flex-1 truncate text-left font-mono text-xs text-zinc-700 select-all">
                   {applyLink}
-                </div>
-                <Button onClick={copyToClipboard} variant="ghost" className="h-10 w-10 rounded-xl hover:bg-white shadow-sm">
-                  {copied ? <Check className="text-emerald-600" size={16} /> : <Copy size={16} />}
+                </span>
+                <Button 
+                  onClick={copyToClipboard} 
+                  variant="outline" 
+                  size="sm"
+                  className="h-7 px-2 text-xs border-zinc-300"
+                >
+                  {copied ? <Check size={12} className="text-emerald-600 mr-1" /> : <Copy size={12} className="mr-1" />}
+                  {copied ? 'Copied' : 'Copy'}
                 </Button>
               </div>
 
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 h-12 rounded-2xl font-bold text-sm border-slate-200" onClick={reset}>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-xs font-semibold" onClick={reset}>
                   Close
                 </Button>
-                <Button className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-bold text-sm shadow-xl shadow-emerald-600/20 gap-2" onClick={() => window.open(applyLink, '_blank')}>
-                  Preview Page <ExternalLink size={16} />
+                <Button 
+                  size="sm"
+                  className="flex-1 h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5" 
+                  onClick={() => window.open(applyLink, '_blank')}
+                >
+                  <ExternalLink size={12} />
+                  Open Application Page
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="p-6 max-h-[calc(90vh-3rem)] overflow-y-auto">
-              <DialogHeader className="mb-6">
-                <DialogTitle className="text-2xl font-black text-[#0F172A] tracking-tight">Create New Job Opening</DialogTitle>
-                <p className="text-slate-500 text-xs mt-2">Jobs are stored in Supabase PostgreSQL database</p>
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <DialogHeader className="text-left pb-2 border-b border-zinc-100">
+                <DialogTitle className="text-base font-bold text-zinc-900">Create Job Opening</DialogTitle>
+                <p className="text-xs text-zinc-500">Post a new opening to start collecting and AI-screening candidate resumes.</p>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="title" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Job Title</Label>
-                    <Input id="title" name="title" placeholder="e.g. Senior Product Designer" required className="h-12 rounded-2xl border-slate-200 bg-slate-50/50 focus-visible:ring-emerald-500/20 px-4 text-sm" />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-zinc-700">Job Title *</Label>
+                  <Input 
+                    name="title" 
+                    required 
+                    placeholder="e.g. Senior Frontend Engineer" 
+                    className="h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-zinc-700">Hiring Company / Client</Label>
+                    <span className="text-[10px] text-zinc-400">In emails</span>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="department" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Department / Location</Label>
-                    <Input 
-                      id="department" 
-                      name="department" 
-                      placeholder="e.g. Engineering, Remote" 
-                      required 
-                      className="h-12 rounded-2xl border-slate-200 bg-slate-50/50 focus-visible:ring-emerald-500/20 px-4 text-sm" 
+                  <Input 
+                    name="company_name" 
+                    value={clientCompanyName}
+                    onChange={(e) => setClientCompanyName(e.target.value)}
+                    placeholder="e.g. Acme Corp or Client Name" 
+                    className="h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-400 -mt-2 block">
+                Hiring for a client? Enter their company name so applicant emails & interview invites show their brand.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-zinc-700">Department</Label>
+                  <Input 
+                    name="department" 
+                    placeholder="Engineering / Product" 
+                    className="h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                  />
+                </div>
+
+                {/* Workplace Type Dropdown */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-zinc-700">Workplace Type</Label>
+                  <select 
+                    value={workplaceType}
+                    onChange={(e) => setWorkplaceType(e.target.value as any)}
+                    className="w-full h-9 px-2.5 rounded-md border border-zinc-200 text-xs bg-white text-zinc-800 font-medium focus-visible:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                  >
+                    <option value="remote">Remote (Anywhere)</option>
+                    <option value="hybrid">Hybrid (Office + Remote)</option>
+                    <option value="physical">On-site / Physical Office</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Conditional Physical Office / City Location Input */}
+              {(workplaceType === 'physical' || workplaceType === 'hybrid') && (
+                <div className="p-3 bg-zinc-50/80 rounded-lg border border-zinc-200 space-y-2 animate-in fade-in slide-in-from-top-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-zinc-800 flex items-center gap-1.5">
+                      <MapPin size={13} className="text-emerald-600" />
+                      {workplaceType === 'physical' ? 'Office Location / City' : 'Office Base Location (Hybrid)'}
+                    </Label>
+                    {localStorage.getItem('hireforce_saved_office_location') && (
+                      <span className="text-[10px] text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        Auto-filled from saved
+                      </span>
+                    )}
+                  </div>
+                  <Input 
+                    value={officeLocation}
+                    onChange={(e) => setOfficeLocation(e.target.value)}
+                    required
+                    placeholder="e.g. Karachi, Pakistan or Shahrah-e-Faisal, Karachi" 
+                    className="h-9 text-xs rounded-md border-zinc-200 bg-white focus-visible:ring-emerald-500"
+                  />
+                  <label className="flex items-center gap-2 pt-0.5 text-[11px] text-zinc-600 cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={saveLocationAsDefault}
+                      onChange={(e) => setSaveLocationAsDefault(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                     />
-                  </div>
+                    <span>Save this location as default for future job posts</span>
+                  </label>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="salary" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Salary Range</Label>
-                  <Input id="salary" name="salary" placeholder="e.g. $120k - $150k" className="h-12 rounded-2xl border-slate-200 bg-slate-50/50 focus-visible:ring-emerald-500/20 px-4 text-sm" />
+              )}
+
+              {/* Salary with Auto PKR Prefix */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-700">Salary Range (Optional - Auto {defaultCurrency})</Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-xs font-bold text-zinc-500 select-none pointer-events-none">
+                    {defaultCurrency}
+                  </span>
+                  <Input 
+                    value={salaryInput}
+                    onChange={(e) => setSalaryInput(e.target.value)}
+                    placeholder="150,000 - 250,000 / month" 
+                    className="pl-12 h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500 font-medium"
+                  />
                 </div>
+                <span className="text-[10px] text-zinc-400 block">Currency is automatically set to {defaultCurrency}. Enter numbers or range (e.g. 120,000 or 150,000 - 250,000).</span>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Job Description</Label>
-                  <Textarea id="description" name="description" placeholder="Describe the role and responsibilities..." className="min-h-[80px] rounded-2xl border-slate-200 bg-slate-50/50 focus-visible:ring-emerald-500/20 p-4 text-sm" required />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-zinc-700">Job Description & Role Requirements</Label>
+                  <span className="text-[10px] text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Auto-Evaluated by AI
+                  </span>
                 </div>
+                <Textarea 
+                  name="description" 
+                  required 
+                  placeholder="Paste your full job description here (responsibilities, required skills, tools, and qualifications). The AI screening engine will automatically use this entire scope to evaluate and score applicant resumes..." 
+                  className="min-h-[110px] text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500 leading-relaxed"
+                />
+              </div>
 
-                <div className="p-6 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-[2rem] border border-emerald-100 relative overflow-hidden">
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center">
-                        <HelpCircle className="text-emerald-600" size={16} />
-                      </div>
-                      <div>
-                        <Label htmlFor="screening_questions" className="text-sm font-bold text-[#0F172A]">Custom Screening Questions</Label>
-                        <p className="text-xs text-slate-500 mt-1">Add specific questions for candidates</p>
-                      </div>
-                    </div>
-                    <Textarea 
-                      id="screening_questions" 
-                      name="screening_questions"
-                      placeholder={`Add custom screening questions, one per line:
-
-Question: What motivates you in your work?
-Question: Describe your experience with [specific technology]
-Question: How do you handle tight deadlines?`}
-                      className="bg-white/70 border-emerald-200 rounded-2xl focus-visible:ring-emerald-500/50 p-4 min-h-[100px] placeholder:text-slate-400 text-sm"
-                    />
-                    <p className="text-xs text-emerald-600 font-medium mt-2">
-                      💡 These questions will appear in the application form
-                    </p>
-                  </div>
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-200/20 rounded-full blur-3xl" />
-                </div>
-
-                <div className="p-6 bg-[#0F172A] rounded-[2rem] shadow-xl relative overflow-hidden">
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Sparkles className="text-emerald-400" size={18} />
-                      <Label htmlFor="requirements" className="text-white font-bold text-sm">Requirements / AI Scorecard</Label>
-                    </div>
-                    <Textarea 
-                      id="requirements" 
-                      name="requirements"
-                      placeholder="What are you looking for? (e.g. Must have 3 years of React, experience with SaaS, strong communication skills)" 
-                      className="bg-white/10 border-white/10 text-white rounded-2xl focus-visible:ring-emerald-500/50 p-4 min-h-[80px] placeholder:text-slate-500 text-sm"
-                      required
-                    />
-                  </div>
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-600/10 rounded-full blur-3xl" />
+              {/* Candidate Screening Questions (Optional) */}
+              <div className="p-3 bg-zinc-50/80 rounded-lg border border-zinc-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-zinc-800 flex items-center gap-1.5">
+                    <HelpCircle size={13} className="text-emerald-600" />
+                    Applicant Screening Questions (Optional)
+                  </Label>
+                  <span className="text-[10px] text-zinc-500 font-medium">
+                    {screeningQuestions.length} {screeningQuestions.length === 1 ? 'question' : 'questions'} added
+                  </span>
                 </div>
 
-                <DialogFooter className="pt-2">
-                  <Button type="submit" disabled={loading} className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                    {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : null}
-                    Generate Job & Application Link
+                <div className="flex gap-2">
+                  <Input 
+                    value={newQuestionText}
+                    onChange={(e) => setNewQuestionText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddQuestion(newQuestionText);
+                      }
+                    }}
+                    placeholder="e.g. Do you have 2+ years of professional experience in React?"
+                    className="h-8.5 text-xs rounded-md border-zinc-200 bg-white focus-visible:ring-emerald-500 flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleAddQuestion(newQuestionText)}
+                    disabled={!newQuestionText.trim()}
+                    className="h-8.5 px-3 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold shrink-0 cursor-pointer"
+                  >
+                    <Plus size={13} className="mr-1" />
+                    Add
                   </Button>
-                </DialogFooter>
-              </form>
-            </div>
+                </div>
+
+                {/* Quick Suggestion Chips */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] text-zinc-400 font-medium">Quick Presets:</span>
+                  {[
+                    "Years of relevant domain experience?",
+                    "Are you comfortable with USA timings (8PM - 5AM PKT)?",
+                    "What is your notice period / earliest joining date?",
+                    "What is your expected monthly salary (PKR)?"
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleAddQuestion(preset)}
+                      className="text-[10px] bg-white hover:bg-emerald-50 text-zinc-600 hover:text-emerald-800 border border-zinc-200 hover:border-emerald-200 px-2 py-0.5 rounded transition-all cursor-pointer shadow-2xs"
+                    >
+                      + {preset.length > 25 ? preset.substring(0, 25) + '...' : preset}
+                    </button>
+                  ))}
+                </div>
+
+                {/* List of Added Questions */}
+                {screeningQuestions.length > 0 && (
+                  <div className="space-y-1.5 pt-1.5 border-t border-zinc-200/60">
+                    {screeningQuestions.map((q, idx) => (
+                      <div 
+                        key={idx}
+                        className="flex items-center justify-between gap-2 p-2 bg-white border border-zinc-200 rounded-md text-xs text-zinc-800 shadow-2xs"
+                      >
+                        <div className="flex items-start gap-2 min-w-0">
+                          <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <span className="truncate leading-tight font-medium text-zinc-800">{q}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveQuestion(idx)}
+                          className="text-zinc-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
+                          title="Remove Question"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Optional Custom Criteria Expansion */}
+              <div>
+                {!showCustomCriteria ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomCriteria(true)}
+                    className="text-[11px] text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Plus size={12} />
+                    <span>Add Custom AI Screening Weighting / Knockout Rules (Optional)</span>
+                  </button>
+                ) : (
+                  <div className="space-y-1 pt-1.5 border-t border-zinc-100">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-zinc-700">Custom Screening Criteria (Optional Override)</Label>
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomCriteria(false)}
+                        className="text-[10px] text-zinc-400 hover:text-zinc-600 font-medium cursor-pointer"
+                      >
+                        Hide
+                      </button>
+                    </div>
+                    <Textarea 
+                      name="requirements" 
+                      placeholder="Optional override: Specific knockout criteria, must-have degrees, or specific weighted tools..." 
+                      className="min-h-[65px] text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                    />
+                    <span className="text-[10px] text-zinc-400 block">If left empty, the AI screening engine automatically extracts all evaluation criteria from the Job Description above.</span>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} className="text-xs">
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={loading}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm cursor-pointer"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="animate-spin" size={13} />
+                      Publishing...
+                    </span>
+                  ) : (
+                    "Publish Job"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
           )}
         </DialogContent>
       </Dialog>
 
       <TrialLimitModal 
         open={showLimitModal} 
-        onClose={() => {
-          setShowLimitModal(false);
-          if (isTrial) {
-            // Close parent create job dialog for trial users to prevent further actions
-            setOpen(false);
-          }
-        }} 
-        type="job"
+        onClose={() => setShowLimitModal(false)} 
+        type="job" 
       />
     </>
   );

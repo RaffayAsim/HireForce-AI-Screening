@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Download, Loader2, Check } from 'lucide-react';
+import { Download, Check } from 'lucide-react';
 import { Candidate } from '@/lib/supabase';
-import { showSuccess, showError } from '@/utils/toast';
+import { showSuccess } from '@/utils/toast';
 
 interface CsvExportProps {
   candidates: Candidate[];
@@ -15,27 +15,29 @@ export const CsvExport = ({ candidates, jobTitle }: CsvExportProps) => {
   const [exported, setExported] = useState(false);
 
   const generateCSV = () => {
-    // CSV Headers
-    const headers = ['Name', 'Email', 'LinkedIn', 'AI Score', 'AI Reasoning', 'Status', 'Applied Date'];
+    if (candidates.length === 0) {
+      showSuccess("No candidates to export");
+      return;
+    }
+
+    const headers = ['Name', 'Email', 'Phone', 'LinkedIn', 'AI Score', 'AI Reasoning', 'Status', 'Applied Date'];
     
-    // CSV Rows
     const rows = candidates.map(candidate => [
-      candidate.full_name || '',
-      candidate.email || '',
-      candidate.linkedin || '',
+      `"${candidate.full_name || ''}"`,
+      `"${candidate.email || ''}"`,
+      `"${candidate.phone || ''}"`,
+      `"${candidate.linkedin || ''}"`,
       candidate.screening_score !== null ? candidate.screening_score.toString() : 'N/A',
-      candidate.screening_summary ? `"${candidate.screening_summary.replace(/"/g, '""')}"` : 'N/A',
-      candidate.status || 'new',
-      candidate.created_at ? new Date(candidate.created_at).toLocaleDateString() : 'N/A'
+      `"${(candidate.screening_summary || '').replace(/"/g, '""')}"`,
+      `"${candidate.status || 'new'}"`,
+      `"${candidate.created_at ? new Date(candidate.created_at).toLocaleDateString() : 'N/A'}"`
     ]);
 
-    // Combine headers and rows
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.join(','))
     ].join('\n');
 
-    // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -49,17 +51,18 @@ export const CsvExport = ({ candidates, jobTitle }: CsvExportProps) => {
     
     setExported(true);
     showSuccess(`Exported ${candidates.length} candidates to CSV`);
-    
-    setTimeout(() => setExported(false), 3000);
+    setTimeout(() => setExported(false), 2500);
   };
 
   return (
     <Button
+      variant="outline"
+      size="sm"
       onClick={generateCSV}
-      className="h-12 px-6 bg-blue-600 hover:bg-blue-700 rounded-2xl font-bold gap-2"
+      className="h-8 px-2.5 rounded-md border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 gap-1.5 transition-all shadow-xs"
     >
-      {exported ? <Check size={18} /> : <Download size={18} />}
-      {exported ? 'Exported!' : `Export ${candidates.length} to CSV`}
+      {exported ? <Check size={13} className="text-emerald-600" /> : <Download size={13} />}
+      <span>{exported ? 'Exported' : `Export (${candidates.length})`}</span>
     </Button>
   );
 };

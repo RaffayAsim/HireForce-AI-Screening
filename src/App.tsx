@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { RoleProvider } from "@/contexts/RoleContext";
@@ -19,15 +19,51 @@ import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import TrialRegistration from "./pages/TrialRegistration";
 import Notifications from "./pages/Notifications";
+import CalendarPage from "./pages/InterviewCalendar";
+import EmailsPage from "./pages/EmailsPage";
+import AutomationsPage from "./pages/AutomationsPage";
+import Contact from "./pages/Contact";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Security from "./pages/Security";
 
 const queryClient = new QueryClient();
+
+// Automatic clean reset to purge all leaked legacy demo data & accounts
+if (typeof window !== 'undefined' && localStorage.getItem('hireforce_clean_profile_v10') !== 'true') {
+  try {
+    localStorage.removeItem('hireforce_unified_account');
+    localStorage.removeItem('hireforce_calendar_settings');
+    localStorage.removeItem('hireforce_video_meeting_connected');
+    localStorage.removeItem('hireforce_local_jobs');
+    localStorage.removeItem('hireforce_local_candidates');
+    localStorage.removeItem('hireforce_local_interviews');
+    localStorage.removeItem('hireforce_email_accounts');
+    localStorage.removeItem('hireforce_local_emails');
+
+    // Clear any trial user keys that accidentally captured demo connections
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key) {
+        if (key.startsWith('hireforce_unified_account') || key.startsWith('hireforce_video_meeting_connected') || key.startsWith('hireforce_local_')) {
+          const val = localStorage.getItem(key);
+          if (val && (val.includes('angellagarland') || val.includes('recruiter_lead') || key === 'hireforce_unified_account')) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    }
+    localStorage.setItem('hireforce_clean_profile_v10', 'true');
+  } catch {}
+}
 
 // Protected Route component
 const ProtectedRoute = ({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) => {
   const { isAuthenticated, isAdmin } = useAuth();
+  const location = useLocation();
   
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
   if (requireAdmin && !isAdmin) {
@@ -70,12 +106,27 @@ const AppRoutes = () => {
       } />
       <Route path="/talent-pool/:jobId" element={
         <ProtectedRoute>
-          <TalentPoolWorkspace />
+          <TalentPool />
         </ProtectedRoute>
       } />
       <Route path="/candidates" element={
         <ProtectedRoute>
           <TalentPool />
+        </ProtectedRoute>
+      } />
+      <Route path="/calendar" element={
+        <ProtectedRoute>
+          <CalendarPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/emails" element={
+        <ProtectedRoute>
+          <EmailsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/automations" element={
+        <ProtectedRoute>
+          <AutomationsPage />
         </ProtectedRoute>
       } />
       <Route path="/settings" element={
@@ -90,6 +141,10 @@ const AppRoutes = () => {
       } />
       <Route path="/apply" element={<Apply />} />
       <Route path="/apply/:jobId" element={<Apply />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/security" element={<Security />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

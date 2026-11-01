@@ -1,6 +1,5 @@
-"use client";
-
 import React from 'react';
+import { UpgradeRequestModal } from '@/components/subscription/UpgradeRequestModal';
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, AlertCircle } from 'lucide-react';
@@ -15,11 +14,12 @@ interface TrialStatusBarProps {
 export const TrialStatusBar = ({ className }: TrialStatusBarProps) => {
   const { isTrial, getRemainingScans, user, quotaStatus } = useAuth();
   const navigate = useNavigate();
+  const [upgradeModalOpen, setUpgradeModalOpen] = React.useState(false);
 
   if (!isTrial) return null;
 
   const remainingScans = getRemainingScans();
-  const totalScans = user?.maxScans || 5;
+  const totalScans = user?.maxScans || 10;
   const usedScans = totalScans - remainingScans;
   const progressPercentage = (usedScans / totalScans) * 100;
 
@@ -86,14 +86,15 @@ export const TrialStatusBar = ({ className }: TrialStatusBarProps) => {
         {quotaStatus && (quotaStatus.scansExhausted || quotaStatus.jobsExhausted) && (
           <div className="mt-3 flex justify-center">
             <button
-              onClick={() => navigate('/#pricing')}
+              onClick={() => setUpgradeModalOpen(true)}
               className="text-xs font-bold px-3 py-2 bg-white/90 border border-amber-100 rounded-full text-amber-700 hover:bg-amber-50"
             >
-              Get Started Today
+              Request Plan Upgrade
             </button>
           </div>
         )}
       </div>
+      <UpgradeRequestModal open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen} />
     </div>
   );
 };

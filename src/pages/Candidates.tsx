@@ -58,7 +58,7 @@ const Candidates = () => {
       unsubscribeCandidates();
       unsubscribeJobs();
     };
-  }, []);
+  }, [user?.id]);
 
   // Group candidates by job
   const candidatesByJob = useMemo(() => {
@@ -366,7 +366,7 @@ const Candidates = () => {
                         <p className="text-slate-400 leading-relaxed text-lg">
                           {selectedCandidate.screening_score !== null 
                             ? 'AI analysis complete. Detailed summary not available.'
-                            : 'AI analysis in progress... Results will appear when n8n completes processing.'}
+                            : 'AI analysis in progress... Instant screening score and fit evaluation are being calculated.'}
                         </p>
                       )}
                     </div>

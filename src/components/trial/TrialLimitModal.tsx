@@ -1,6 +1,5 @@
-"use client";
-
 import React from 'react';
+import { UpgradeRequestModal } from '@/components/subscription/UpgradeRequestModal';
 import {
   Dialog,
   DialogContent,
@@ -19,13 +18,15 @@ interface TrialLimitModalProps {
 }
 
 export const TrialLimitModal = ({ open, onClose, type }: TrialLimitModalProps) => {
+  const [upgradeModalOpen, setUpgradeModalOpen] = React.useState(false);
   const title = type === 'scan' ? 'Scan Limit Reached!' : 'Job Limit Reached!';
   const description = type === 'scan' 
-    ? "You've used all 5 AI-powered candidate scans in your trial."
-    : "You've reached the maximum of 1 job posting in your trial.";
+    ? "You've used all 10 AI-powered candidate scans in your trial."
+    : "You've reached the maximum of 10 job postings in your trial.";
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px] rounded-[2.5rem] border-none shadow-2xl bg-white/95 backdrop-blur-2xl p-0 overflow-hidden">
         <div className="h-2 bg-gradient-to-r from-emerald-500 to-teal-600" />
         
@@ -64,7 +65,7 @@ export const TrialLimitModal = ({ open, onClose, type }: TrialLimitModalProps) =
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                  Custom n8n & Supabase integration
+                  Custom AI Screening & Supabase integration
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
@@ -76,10 +77,10 @@ export const TrialLimitModal = ({ open, onClose, type }: TrialLimitModalProps) =
             <div className="flex flex-col gap-3 pt-4">
               <Button 
                 className="h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-base shadow-xl shadow-emerald-600/20 gap-2"
-                onClick={() => window.location.href = 'mailto:sales@hireforce.com'}
+                onClick={() => { onClose(); setUpgradeModalOpen(true); }}
               >
                 <Mail size={18} />
-                Contact Sales Team
+                Request Plan Upgrade
               </Button>
               
               <Button 
@@ -95,5 +96,7 @@ export const TrialLimitModal = ({ open, onClose, type }: TrialLimitModalProps) =
         </div>
       </DialogContent>
     </Dialog>
+      <UpgradeRequestModal open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen} />
+    </>
   );
 };

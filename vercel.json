@@ -2,7 +2,19 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/test-smtp",
+      "destination": "/api/emails/send?action=test-smtp"
+    },
+    {
+      "source": "/api/emails",
+      "destination": "/api/emails/messages"
+    },
+    {
+      "source": "/api/send-email",
+      "destination": "/api/emails/send"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

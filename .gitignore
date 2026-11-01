@@ -1,4 +1,12 @@
+# Environment & Vercel
+.env
+.env*.local
+.vercel
+.nango_config.json
+RESTORE_DATABASE.sql
+
 # Logs
+logs
 logs
 *.log
 npm-debug.log*

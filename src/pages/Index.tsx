@@ -3,17 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import CreateJobModal from '@/components/jobs/CreateJobModal';
-import { ActionCenter } from '@/components/dashboard/ActionCenter';
-import { RecruitmentFunnel } from '@/components/dashboard/RecruitmentFunnel';
 import { 
   Briefcase, 
   Users, 
   TrendingUp, 
   ArrowUpRight,
-  Clock,
   Sparkles,
   ChevronRight,
-  Calendar
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Eye,
+  FileText,
+  Filter
 } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,37 +23,51 @@ import { subscribeToJobs, subscribeToCandidates } from '@/lib/api';
 import { Candidate, Job } from '@/lib/supabase';
 import { useRole } from '@/contexts/RoleContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button } from "@/components/ui/button";
+import { UpgradeRequestModal } from '@/components/subscription/UpgradeRequestModal';
+import { AlertTriangle, Zap as ZapIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
-  <Card className="glass-card rounded-2xl md:rounded-[2.5rem] overflow-hidden group hover:translate-y-[-4px] transition-all duration-500">
-    <CardContent className="p-4 md:p-6 lg:p-8">
-      <div className="flex justify-between items-start mb-4 md:mb-6">
-        <div className={`p-3 md:p-4 rounded-xl md:rounded-[1.5rem] ${color} bg-opacity-10 ring-1 ring-inset ${color.replace('bg-', 'ring-')}/20`}>
-          <Icon className={color.replace('bg-', 'text-')} size={20} />
+interface CompactMetricCardProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  trend?: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}
+
+const CompactMetricCard = ({ title, value, subtitle, trend, icon: Icon }: CompactMetricCardProps) => (
+  <Card className="bg-white border border-zinc-200/90 shadow-sm rounded-lg hover:border-zinc-300 transition-all">
+    <CardContent className="p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-zinc-500">{title}</span>
+        <div className="w-7 h-7 rounded bg-zinc-50 border border-zinc-200 flex items-center justify-center text-zinc-600">
+          <Icon size={14} className="text-emerald-600" />
         </div>
-        {trend && (
-          <div className="flex items-center gap-1 text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold">
-            <ArrowUpRight size={14} />
-            {trend}
-          </div>
-        )}
       </div>
-      <div>
-        <p className="text-slate-500 text-xs md:text-sm font-semibold tracking-wide uppercase">{title}</p>
-        <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-[#0F172A] mt-2 tracking-tight">{value}</h3>
+      <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-bold tracking-tight text-zinc-900">{value}</span>
+          {trend && (
+            <span className="text-[11px] font-semibold text-emerald-600 flex items-center">
+              {trend}
+            </span>
+          )}
+        </div>
       </div>
+      <p className="text-[11px] text-zinc-400 mt-1">{subtitle}</p>
     </CardContent>
   </Card>
 );
 
 const Index = () => {
-  const { isAdmin, isViewer } = useRole();
-  const { user } = useAuth();
+  const { isAdmin } = useRole();
+  const { user, isTrial, quotaStatus, hasReachedScanLimit, hasReachedJobLimit, getRemainingScans } = useAuth();
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Real-time subscriptions
   useEffect(() => {
     setLoading(true);
     
@@ -68,139 +84,299 @@ const Index = () => {
       unsubscribeJobs();
       unsubscribeCandidates();
     };
-  }, []);
+  }, [user?.id]);
 
-  // Calculate stats
+  // Derived metrics
   const activeJobs = jobs.filter(j => j.status === 'Active' || !j.status).length;
   const totalApplicants = candidates.length;
-  const highMatchCount = candidates.filter(c => c.screening_score !== null && c.screening_score >= 80).length;
-  const aiEfficiency = totalApplicants > 0 
-    ? Math.round((candidates.filter(c => c.screening_score !== null).length / totalApplicants) * 100) 
+  const screenedCount = candidates.filter(c => c.screening_score !== null).length;
+  const highMatches = candidates.filter(c => c.screening_score !== null && c.screening_score >= 80).length;
+  const avgScore = screenedCount > 0 
+    ? Math.round(candidates.reduce((acc, c) => acc + (c.screening_score || 0), 0) / screenedCount)
     : 0;
 
-  // Recent candidates - last 3 screened
-  const recentCandidates = candidates
+  const recentScreened = candidates
     .filter(c => c.screening_score !== null)
-    .slice(0, 3);
+    .slice(0, 5);
+
+  const getJobTitle = (jobId: string) => {
+    const found = jobs.find(j => j.id === jobId);
+    return found?.title || 'General Position';
+  };
+
+  const remainingScans = getRemainingScans ? getRemainingScans() : 0;
+  const isScansExhausted = Boolean(
+    isTrial && (
+      (hasReachedScanLimit && hasReachedScanLimit()) || 
+      remainingScans <= 0 ||
+      Boolean(quotaStatus?.scansExhausted)
+    )
+  );
+  const isJobsExhausted = Boolean(
+    isTrial && (
+      (hasReachedJobLimit && hasReachedJobLimit()) ||
+      Boolean(quotaStatus?.jobsExhausted)
+    )
+  );
+  const isTrialExhausted = isScansExhausted;
+  const totalScans = Math.max(user?.maxScans || 10, 10);
+  const usedScans = Math.max(0, totalScans - remainingScans);
+  const maxJobs = Math.max(user?.maxJobs || 10, 10);
+
+
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 md:mb-12 gap-4 md:gap-6">
+      {/* Page Title & Quick Actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 rounded-full px-3 py-1 font-bold text-[9px] md:text-[10px] uppercase tracking-widest">
-              {loading ? 'Loading...' : 'Connected to Supabase'}
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Dashboard</h1>
+            <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200/80 font-medium">
+              Live Pipeline
             </Badge>
           </div>
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-[#0F172A] tracking-tight">Executive Overview</h1>
-          <p className="text-slate-500 mt-2 text-sm md:text-base font-medium">The Smart Way to Build Your Team.</p>
+          <p className="text-xs text-zinc-500">
+            Real-time candidate evaluation, match scoring, and active openings.
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          <button className="p-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
-            <Calendar size={20} />
-          </button>
-          {isAdmin && <CreateJobModal />}
+        <div className="flex items-center gap-2">
+          <Link
+            to="/talent-pool"
+            className="h-8 px-3 rounded-md bg-white border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5 transition-colors"
+          >
+            <Users size={13} />
+            View All Candidates
+          </Link>
+          <CreateJobModal />
         </div>
       </div>
 
-      {/* Action Center - Needs Your Attention */}
-      <div className="mb-8">
-        <ActionCenter candidates={candidates} />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 lg:gap-8 mb-8 md:mb-12">
-        <StatCard 
-          title="Active Positions" 
-          value={loading ? '...' : activeJobs} 
-          icon={Briefcase} 
-          color="bg-emerald-600" 
-        />
-        <StatCard 
-          title="Total Applicants" 
-          value={loading ? '...' : totalApplicants} 
-          icon={Users} 
-          trend={highMatchCount > 0 ? `+${highMatchCount} high matches` : undefined}
-          color="bg-emerald-600" 
-        />
-        <StatCard 
-          title="AI Efficiency" 
-          value={loading ? '...' : `${aiEfficiency}%`} 
-          icon={TrendingUp} 
-          color="bg-emerald-600" 
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
-        <div className="lg:col-span-2 glass-card rounded-2xl md:rounded-[3rem] p-4 md:p-6 lg:p-10">
-          <div className="flex justify-between items-start md:items-center mb-6 md:mb-10 flex-col md:flex-row gap-4">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold text-[#0F172A]">Real-time Activity</h2>
-              <p className="text-slate-500 text-xs md:text-sm mt-1">Live updates from your active pipelines</p>
-            </div>
-            <button className="flex items-center gap-2 text-emerald-600 text-sm font-bold hover:gap-3 transition-all">
-              View Full Audit <ChevronRight size={16} />
-            </button>
-          </div>
-          
-          <div className="space-y-8">
-            {recentCandidates.length > 0 ? (
-              recentCandidates.map((candidate) => (
-                <div key={candidate.id} className="flex items-center justify-between group cursor-pointer">
-                  <div className="flex gap-5 items-center">
-                    <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0 ring-1 ring-slate-200 group-hover:scale-110 transition-transform duration-300">
-                      <Clock size={22} className="text-slate-400" />
-                    </div>
-                    <div>
-                      <p className="text-base text-slate-900 font-bold">
-                        {candidate.full_name} <span className="font-medium text-slate-400 mx-1">applied for</span> <span className="text-emerald-600">position</span>
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1 font-bold uppercase tracking-wider">
-                        {candidate.created_at ? new Date(candidate.created_at).toLocaleDateString() : 'Unknown date'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-black text-[#0F172A]">{candidate.screening_score}%</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI Match</div>
-                  </div>
+      {/* Trial Status / Soft Pause Banner */}
+      {isTrial && (
+        <div className={`mb-6 p-4 rounded-xl border transition-all ${
+          isTrialExhausted 
+            ? "bg-amber-500/10 border-amber-500/30 text-amber-900" 
+            : "bg-emerald-500/10 border-emerald-500/20 text-emerald-900"
+        }`}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                isTrialExhausted ? "bg-amber-500 text-white" : "bg-emerald-600 text-white"
+              }`}>
+                {isTrialExhausted ? <AlertTriangle size={18} /> : <Sparkles size={18} />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-zinc-900">
+                    {isScansExhausted 
+                      ? "Trial Quota Reached — AI Resume Screening & Automations Soft Paused" 
+                      : isJobsExhausted
+                        ? `Job Limit Reached — ${maxJobs} of ${maxJobs} Job Slots In Use`
+                        : `Free Trial Active — ${totalScans} AI Screenings & ${maxJobs} Active Jobs Included`}
+                  </h3>
+                  <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    isScansExhausted 
+                      ? "bg-amber-100 text-amber-800 border-amber-300" 
+                      : isJobsExhausted
+                        ? "bg-blue-100 text-blue-800 border-blue-300"
+                        : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                  }`}>
+                    {isScansExhausted ? "Soft Paused" : isJobsExhausted ? "Jobs Full" : `${remainingScans} scans left`}
+                  </Badge>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-slate-500 font-medium">No screened candidates yet. Applications will appear here when n8n completes processing.</p>
+                <p className="text-xs text-zinc-600 mt-1 max-w-2xl leading-relaxed">
+                  {isScansExhausted
+                    ? "You've reached your free trial screening allowance. Your candidate database, resumes, notes, and emails remain fully accessible. Upgrade your plan to re-enable automated AI candidate evaluations and interview automations."
+                    : isJobsExhausted
+                      ? `You have reached your limit of ${maxJobs} active job postings. AI candidate screening is still fully active (${remainingScans} scans left). Upgrade to Pro for unlimited job postings.`
+                      : `You have used ${usedScans} of ${totalScans} AI candidate screenings and ${jobs.length} of ${maxJobs} job slots. Your pipeline and emails are fully active.`}
+                </p>
               </div>
-            )}
+            </div>
+            <Button
+              onClick={() => setUpgradeModalOpen(true)}
+              className={`h-9 px-4 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm flex-shrink-0 ${
+                isTrialExhausted 
+                  ? "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20" 
+                  : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
+              }`}
+            >
+              <ZapIcon size={14} />
+              {isTrialExhausted ? "Request Plan Upgrade" : "Upgrade Plan"}
+            </Button>
           </div>
+        </div>
+      )}
+
+      {/* 4 Compact Metric Cards (Concept 3) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+        <CompactMetricCard 
+          title="Active Job Openings" 
+          value={loading ? '...' : activeJobs} 
+          subtitle="Open positions receiving applications"
+          trend={activeJobs > 0 ? `+${activeJobs} active` : undefined}
+          icon={Briefcase} 
+        />
+        <CompactMetricCard 
+          title="Total Candidates" 
+          value={loading ? '...' : totalApplicants} 
+          subtitle="Candidates in talent pool"
+          trend={totalApplicants > 0 ? `+${totalApplicants} total` : undefined}
+          icon={Users} 
+        />
+        <CompactMetricCard 
+          title="Screened by AI" 
+          value={loading ? '...' : screenedCount} 
+          subtitle="Processed through screening webhook"
+          trend={screenedCount > 0 ? `${screenedCount} analyzed` : undefined}
+          icon={Sparkles} 
+        />
+        <CompactMetricCard 
+          title="Average Match Score" 
+          value={loading ? '...' : (avgScore > 0 ? `${avgScore}%` : 'N/A')} 
+          subtitle={`${highMatches} high match candidates (80%+)`}
+          trend={highMatches > 0 ? `${highMatches} top tier` : undefined}
+          icon={TrendingUp} 
+        />
+      </div>
+
+      {/* Main Grid: AI Candidate Screening Table & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Left Column: AI Screening Table (Concept 3 core) */}
+        <div className="lg:col-span-2">
+          <Card className="bg-white border border-zinc-200/90 shadow-sm rounded-lg overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-zinc-900">AI Candidate Screening</h2>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Automated resume evaluation and qualifications matching</p>
+              </div>
+              <Link 
+                to="/talent-pool" 
+                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+              >
+                Open Full Pipeline
+                <ChevronRight size={13} />
+              </Link>
+            </div>
+
+            <div className="overflow-x-auto">
+              {recentScreened.length > 0 ? (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50/70 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                      <th className="py-2.5 px-4">Candidate</th>
+                      <th className="py-2.5 px-4">Job Role</th>
+                      <th className="py-2.5 px-4">Match %</th>
+                      <th className="py-2.5 px-4">Status</th>
+                      <th className="py-2.5 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 text-xs">
+                    {recentScreened.map((c) => {
+                      const score = c.screening_score || 0;
+                      const isHigh = score >= 80;
+                      const isMed = score >= 60 && score < 80;
+
+                      return (
+                        <tr key={c.id} className="hover:bg-zinc-50/70 transition-colors">
+                          <td className="py-3 px-4 font-semibold text-zinc-900">
+                            <div>{c.full_name}</div>
+                            <div className="text-[11px] font-normal text-zinc-400">{c.email}</div>
+                          </td>
+                          <td className="py-3 px-4 text-zinc-600">
+                            {getJobTitle(c.job_id)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${
+                              isHigh 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                : isMed 
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
+                            }`}>
+                              {score}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-700 capitalize">
+                              {c.status || 'Screened'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <Link
+                              to={`/talent-pool/${c.job_id || ''}`}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700"
+                            >
+                              View <ArrowUpRight size={12} />
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-8 text-center text-zinc-400 text-xs">
+                  <Sparkles size={24} className="mx-auto mb-2 text-zinc-300" />
+                  <p className="font-semibold text-zinc-700">No candidates screened yet</p>
+                  <p className="mt-1">Candidates who apply through your job links will be evaluated here.</p>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
 
-        <div className="space-y-8">
-          <RecruitmentFunnel candidates={candidates} />
-          
-          <div className="bg-[#0F172A] rounded-[3rem] p-10 shadow-2xl text-white relative overflow-hidden flex flex-col justify-between min-h-[200px]">
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center mb-8 ring-1 ring-emerald-500/30">
-                <Sparkles className="text-emerald-400" size={24} />
+        {/* Right Column: Active Jobs Mini-Panel */}
+        <div>
+          <Card className="bg-white border border-zinc-200/90 shadow-sm rounded-lg overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-zinc-900">Active Openings</h2>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Top performing job postings</p>
               </div>
-              <h2 className="text-3xl font-bold mb-4 leading-tight">AI Talent Insights</h2>
-              <p className="text-slate-400 text-lg leading-relaxed">
-                {highMatchCount > 0 
-                  ? `You have ${highMatchCount} high-match candidates waiting for review.`
-                  : 'Candidates will appear here after n8n AI screening is complete.'}
-              </p>
+              <Link 
+                to="/jobs" 
+                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+              >
+                Manage
+              </Link>
             </div>
-            
-            <div className="relative z-10 mt-8">
-              <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-5 rounded-2xl font-bold shadow-xl shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                {highMatchCount > 0 ? 'Review Candidates' : 'View Candidates'}
-              </button>
+            <div className="p-4 space-y-2.5">
+              {jobs.slice(0, 4).map((job) => {
+                const jobCandidates = candidates.filter(c => c.job_id === job.id);
+                return (
+                  <Link
+                    key={job.id}
+                    to={`/talent-pool/${job.id}`}
+                    className="block p-3 rounded-md border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50/50 transition-all group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-semibold text-zinc-900 group-hover:text-emerald-600 transition-colors truncate">
+                        {job.title}
+                      </h3>
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                        {jobCandidates.length} applicants
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-1.5">
+                      <span>{job.department || 'General'}</span>
+                      <span>•</span>
+                      <span>{job.location || 'Remote'}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+              {jobs.length === 0 && (
+                <div className="p-4 text-center text-xs text-zinc-400">
+                  No jobs created yet.
+                </div>
+              )}
             </div>
-            
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600/10 rounded-full blur-[100px] -mr-32 -mt-32" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-600/10 rounded-full blur-[100px] -ml-32 -mb-32" />
-            <Sparkles className="absolute right-[-40px] bottom-[-40px] text-white/5 w-80 h-80 rotate-12" />
-          </div>
+          </Card>
         </div>
       </div>
+      <UpgradeRequestModal open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen} />
     </DashboardLayout>
   );
 };

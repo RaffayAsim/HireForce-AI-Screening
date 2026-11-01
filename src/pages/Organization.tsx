@@ -1,333 +1,731 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
-  Users, 
-  TrendingUp, 
-  Target, 
-  Award, 
-  Calendar,
-  MapPin,
-  Globe,
-  Building,
-  Zap,
-  Star,
-  ArrowUpRight,
-  Briefcase,
-  Clock,
-  CheckCircle,
-  Eye,
+  Building2, 
+  Sparkles, 
+  Save, 
+  Check, 
+  Mail, 
+  Calendar as CalendarIcon, 
+  Video, 
+  AlertCircle, 
+  RefreshCw, 
+  Zap, 
+  ShieldCheck, 
+  ExternalLink,
+  Trash2,
   Lock,
-  ExternalLink
+  ArrowRight,
+  Globe
 } from 'lucide-react';
-import { useRole } from '@/contexts/RoleContext';
-import { useNavigate } from 'react-router-dom';
-
-const StatCard = ({ title, value, icon: Icon, trend, color, description }: any) => (
-  <Card className="glass-card rounded-[2.5rem] overflow-hidden group hover:translate-y-[-4px] transition-all duration-500">
-    <CardContent className="p-8">
-      <div className="flex justify-between items-start mb-6">
-        <div className={`p-4 rounded-[1.5rem] ${color} bg-opacity-10 ring-1 ring-inset ${color.replace('bg-', 'ring-')}/20`}>
-          <Icon className={color.replace('bg-', 'text-')} size={24} />
-        </div>
-        {trend && (
-          <div className="flex items-center gap-1 text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold">
-            <ArrowUpRight size={14} />
-            {trend}
-          </div>
-        )}
-      </div>
-      <div>
-        <p className="text-slate-500 text-sm font-semibold tracking-wide uppercase">{title}</p>
-        <h3 className="text-4xl font-black text-[#0F172A] mt-2 tracking-tight">{value}</h3>
-        {description && <p className="text-xs text-slate-400 mt-2">{description}</p>}
-      </div>
-    </CardContent>
-  </Card>
-);
-
-const TeamMember = ({ name, role, avatar, status }: any) => (
-  <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/50 border border-white/20 hover:bg-white/70 transition-all">
-    <Avatar className="h-12 w-12 border-2 border-white shadow-md">
-      <AvatarImage src={avatar} />
-      <AvatarFallback>{name[0]}</AvatarFallback>
-    </Avatar>
-    <div className="flex-1">
-      <h4 className="font-bold text-[#0F172A]">{name}</h4>
-      <p className="text-sm text-slate-600">{role}</p>
-    </div>
-    <div className={`w-3 h-3 rounded-full ${status === 'active' ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-  </div>
-);
+import { useAuth } from '@/contexts/AuthContext';
+import { showSuccess, showError } from '@/utils/toast';
+import { 
+  getConnectedAccount, 
+  saveConnectedAccount, 
+  disconnectEmailAccount, 
+  disconnectCalendarAccount,
+  isEmailConnected,
+  isCalendarConnected,
+  isVideoMeetingConnected,
+  disconnectVideoMeetingAccount,
+  connectVideoMeetingAccount,
+  disconnectAccount,
+  ConnectedRecruiterAccount 
+} from '@/lib/connectedAccountService';
+import { clearAllProfileData } from '@/lib/api';
+import { ConnectWorkAccountModal } from '@/components/account/ConnectWorkAccountModal';
 
 const Organization = () => {
-  const { userRole, setUserRole, isAdmin, isViewer } = useRole();
-  const navigate = useNavigate();
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const { user } = useAuth();
+  const [saved, setSaved] = useState(false);
+  const [connectedAcc, setConnectedAcc] = useState<ConnectedRecruiterAccount | null>(() => getConnectedAccount(user?.id));
+  
+  // Modal states for Email, Calendar & Video Meetings
+  const [modalCategory, setModalCategory] = useState<'email' | 'calendar' | 'meeting' | 'all'>('email');
+  const [modalProviderId, setModalProviderId] = useState<string | undefined>(undefined);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const teamMembers = [
-    { name: "Sarah Johnson", role: "Head of People", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah", status: "active" },
-    { name: "Mike Chen", role: "Engineering Manager", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=mike", status: "active" },
-    { name: "Emily Rodriguez", role: "Product Lead", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=emily", status: "active" },
-    { name: "David Kim", role: "Design Director", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=david", status: "active" },
-    { name: "Lisa Wang", role: "Data Scientist", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=lisa", status: "active" },
-    { name: "Alex Thompson", role: "Marketing Manager", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=alex", status: "active" }
-  ];
+  useEffect(() => {
+    const acc = getConnectedAccount(user?.id);
+    if (user?.userType === 'trial' && acc?.email?.toLowerCase().includes('angellagarland')) {
+      disconnectAccount(user?.id);
+      setConnectedAcc(null);
+    } else {
+      setConnectedAcc(acc);
+    }
+  }, [user?.id, user?.userType]);
 
-  const recentActivities = [
-    { action: "New hire onboarding", person: "Alex Rivera", time: "2 hours ago", type: "success" },
-    { action: "Performance review completed", person: "Sarah Chen", time: "4 hours ago", type: "info" },
-    { action: "Team expansion approved", person: "Mike Chen", time: "1 day ago", type: "success" },
-    { action: "Training program launched", person: "Emily Rodriguez", time: "2 days ago", type: "info" }
-  ];
+  useEffect(() => {
+    const handleUpdate = () => {
+      const acc = getConnectedAccount(user?.id);
+      if (user?.userType === 'trial' && acc?.email?.toLowerCase().includes('angellagarland')) {
+        disconnectAccount(user?.id);
+        setConnectedAcc(null);
+      } else {
+        setConnectedAcc(acc);
+      }
+    };
+    window.addEventListener('unified_account_updated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('unified_account_updated', handleUpdate);
+    };
+  }, [user?.id, user?.userType]);
+
+  const [profile, setProfile] = useState({
+    companyName: user?.companyName || 'HireFlow Demo',
+    industry: 'Technology & AI Automation',
+    location: 'Remote / Global',
+    hiringEmail: user?.email || 'recruiting@hireforce.ai',
+  });
+
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetAllDemoData = async () => {
+    if (!window.confirm("Are you sure you want to completely clear all data? This will delete all jobs, candidates, resumes, and interview schedules, and disconnect all email & calendar connections so you can test as a brand new profile.")) {
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await clearAllProfileData();
+      showSuccess("All demo data, jobs, candidates, interviews, and connections have been completely cleared!");
+      setTimeout(() => {
+        window.location.href = '/jobs';
+      }, 1000);
+    } catch (err: any) {
+      showError("Failed to clear data: " + (err?.message || "Unknown error"));
+      setIsResetting(false);
+    }
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaved(true);
+    showSuccess('Organization settings saved successfully!');
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleOpenConnect = (cat: 'email' | 'calendar' | 'meeting' | 'all', providerId?: string) => {
+    setModalProviderId(providerId);
+    setModalCategory(cat);
+    setIsModalOpen(true);
+  };
+
+  const handleToggleMeetingFormat = (format: 'teams' | 'google_meet') => {
+    const existing = getConnectedAccount(user?.id);
+    if (existing) {
+      const updated: ConnectedRecruiterAccount = {
+        ...existing,
+        calendar_sync: {
+          ...existing.calendar_sync,
+          default_format: format,
+          calendar_name: format === 'teams' ? 'Microsoft Teams' : 'Google Calendar (Primary)',
+        }
+      };
+      saveConnectedAccount(updated, user?.id);
+      setConnectedAcc(updated);
+      connectVideoMeetingAccount(format, user?.id);
+      showSuccess(`Default interview room format switched to ${format === 'teams' ? 'Microsoft Teams' : 'Google Meet'}!`);
+    } else {
+      handleOpenConnect('meeting');
+    }
+  };
+
+  const handleDisconnectEmail = () => {
+    if (window.confirm('Disconnect your email mailbox? Candidate email thread syncing will be paused.')) {
+      disconnectEmailAccount(user?.id);
+      showSuccess('Email mailbox disconnected.');
+    }
+  };
+
+  const handleDisconnectCalendar = () => {
+    if (window.confirm('Disconnect your calendar integration? Video room generation and availability sync will be paused.')) {
+      disconnectCalendarAccount(user?.id);
+      showSuccess('Calendar integration disconnected.');
+    }
+  };
+
+  const handleDisconnectMeeting = () => {
+    if (window.confirm('Disconnect your video meeting integration? Meeting room generation will be paused.')) {
+      disconnectVideoMeetingAccount(user?.id);
+      setConnectedAcc(getConnectedAccount(user?.id));
+      showSuccess('Video meeting integration disconnected.');
+    }
+  };
+
+  const emailActive = isEmailConnected(user?.id);
+  const calendarActive = isCalendarConnected(user?.id);
+  const videoActive = isVideoMeetingConnected(user?.id);
 
   return (
     <DashboardLayout>
-      <div className="mb-12">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-[2rem] flex items-center justify-center shadow-xl shadow-purple-500/20 ring-1 ring-white/20">
-              <Building className="text-white" size={28} />
-            </div>
-            <div>
-              <h1 className="text-4xl font-black text-[#0F172A] tracking-tight">Organization Overview</h1>
-              <p className="text-slate-500 mt-2 text-lg font-medium">Team insights, company metrics, and organizational health.</p>
-            </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Workspace Settings</h1>
+            <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+              Active Organization
+            </Badge>
           </div>
-          
-          {/* Role Toggle */}
-          <Card className="glass-card rounded-2xl p-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Eye className={`${isViewer ? 'text-blue-600' : 'text-slate-400'}`} size={20} />
-                <span className={`font-bold ${isViewer ? 'text-blue-600' : 'text-slate-500'}`}>Viewer</span>
-              </div>
-              <Switch 
-                checked={isAdmin}
-                onCheckedChange={(checked) => setUserRole(checked ? 'admin' : 'viewer')}
-              />
-              <div className="flex items-center gap-2">
-                <Lock className={`${isAdmin ? 'text-emerald-600' : 'text-slate-400'}`} size={20} />
-                <span className={`font-bold ${isAdmin ? 'text-emerald-600' : 'text-slate-500'}`}>Admin</span>
-              </div>
-            </div>
-          </Card>
+          <p className="text-xs text-zinc-500">
+            Configure your recruiter email mailbox, calendar sync, video interview rooms, and corporate profile.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleSave}
+            size="sm"
+            className="h-8 px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm gap-1.5"
+          >
+            {saved ? <Check size={13} /> : <Save size={13} />}
+            <span>{saved ? 'Saved' : 'Save Changes'}</span>
+          </Button>
         </div>
       </div>
 
-      {/* Role Indicator Banner */}
-      <Card className={`mb-8 rounded-2xl ${isViewer ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
-        <CardContent className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isViewer ? 'bg-amber-500/10' : 'bg-emerald-500/10'}`}>
-              {isViewer ? <Eye className="text-amber-600" size={24} /> : <Lock className="text-emerald-600" size={24} />}
-            </div>
-            <div>
-              <h3 className={`font-bold ${isViewer ? 'text-amber-800' : 'text-emerald-800'}`}>
-                Currently in {isViewer ? 'Viewer' : 'Admin'} Mode
-              </h3>
-              <p className={`text-sm ${isViewer ? 'text-amber-600' : 'text-emerald-600'}`}>
-                {isViewer 
-                  ? 'Read-only access. Cannot modify candidates or create jobs.' 
-                  : 'Full access to all features and actions.'}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-        <StatCard 
-          title="Total Employees" 
-          value="247" 
-          icon={Users} 
-          trend="+12 this month"
-          color="bg-blue-600"
-          description="Growing team across all departments"
-        />
-        <StatCard 
-          title="Open Positions" 
-          value="18" 
-          icon={Target} 
-          color="bg-emerald-600"
-          description="Active recruitment campaigns"
-        />
-        <StatCard 
-          title="Employee Satisfaction" 
-          value="4.7/5" 
-          icon={Star} 
-          trend="+0.2 this quarter"
-          color="bg-amber-600"
-          description="Based on quarterly surveys"
-        />
-        <StatCard 
-          title="Retention Rate" 
-          value="94.2%" 
-          icon={Award} 
-          trend="+2.1% vs last year"
-          color="bg-purple-600"
-          description="12-month rolling average"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 glass-card rounded-[3rem] p-10">
-          <div className="flex justify-between items-center mb-10">
-            <div>
-              <h2 className="text-2xl font-bold text-[#0F172A]">Team Directory</h2>
-              <p className="text-slate-500 text-sm mt-1">Key team members and their roles</p>
-            </div>
-            {isAdmin && (
-              <Button variant="outline" className="rounded-2xl">
-                View All Teams
-              </Button>
-            )}
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {teamMembers.map((member, i) => (
-              <TeamMember key={i} {...member} />
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-8">
-          <Card className="glass-card rounded-[2.5rem] overflow-hidden">
-            <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-lg font-bold text-[#0F172A] flex items-center gap-3">
-                <Clock className="text-blue-600" size={20} />
-                Recent Activities
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0 space-y-4">
-              {recentActivities.map((activity, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full mt-2 ${
-                    activity.type === 'success' ? 'bg-emerald-500' : 'bg-blue-500'
-                  }`}></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-700">{activity.action}</p>
-                    <p className="text-xs text-slate-500">{activity.person} • {activity.time}</p>
-                  </div>
+      {/* THREE DEDICATED INTEGRATION BOXES: EMAIL, CALENDAR & VIDEO MEETINGS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-6">
+        
+        {/* BOX 1: RECRUITER EMAIL MAILBOX */}
+        <Card className="bg-white border border-zinc-200/90 rounded-xl shadow-xs overflow-hidden flex flex-col justify-between">
+          <div>
+            <CardHeader className="p-5 pb-3 border-b border-zinc-100 flex flex-row items-start justify-between space-y-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-600">
+                  <Mail size={18} />
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Careers Page Preview */}
-          <Card className="glass-card rounded-[2.5rem] overflow-hidden">
-            <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-lg font-bold text-[#0F172A] flex items-center gap-3">
-                <Globe className="text-purple-600" size={20} />
-                Careers Page Preview
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0">
-              <p className="text-sm text-slate-500 mb-4">
-                Preview how your public job board appears to candidates.
-              </p>
-              <div className="bg-slate-100 rounded-2xl p-4 mb-4">
-                <div className="bg-white rounded-xl p-4 shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                      <Zap className="text-white" size={16} />
-                    </div>
-                    <span className="font-bold text-sm">HireFlow Careers</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-2 bg-slate-100 rounded w-3/4"></div>
-                    <div className="h-2 bg-slate-100 rounded w-1/2"></div>
-                  </div>
+                <div>
+                  <CardTitle className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                    Email Mailbox Integration
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-500">
+                    Send candidate interview invites & sync inbox threads
+                  </CardDescription>
                 </div>
               </div>
-              <Button 
-                className="w-full rounded-xl font-bold gap-2"
-                onClick={() => navigate('/jobs')}
+              <Badge 
+                variant="outline" 
+                className={emailActive ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]" : "bg-zinc-100 text-zinc-500 border-zinc-200 text-[10px]"}
               >
-                <ExternalLink size={16} />
-                View Public Careers Page
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#0F172A] rounded-[2.5rem] overflow-hidden text-white">
-            <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-lg font-bold flex items-center gap-3">
-                <Zap className="text-blue-400" size={20} />
-                Quick Actions
-              </CardTitle>
+                {emailActive ? "Active & Synced" : "Not Connected"}
+              </Badge>
             </CardHeader>
-            <CardContent className="p-6 pt-0 space-y-3">
-              {isAdmin ? (
-                <>
-                  <Button className="w-full h-12 bg-blue-600 hover:bg-blue-700 rounded-2xl font-bold text-sm">
-                    <Users className="mr-2" size={16} />
-                    Add New Team Member
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-12 rounded-2xl font-bold text-sm border-white/20 text-white hover:bg-white/10"
-                    onClick={() => navigate('/jobs')}
-                  >
-                    <Target className="mr-2" size={16} />
-                    Create Job Opening
-                  </Button>
-                  <Button variant="outline" className="w-full h-12 rounded-2xl font-bold text-sm border-white/20 text-white hover:bg-white/10">
-                    <Calendar className="mr-2" size={16} />
-                    Schedule Team Review
-                  </Button>
-                </>
+
+            <CardContent className="p-5 space-y-4">
+              {emailActive && connectedAcc ? (
+                <div className="space-y-3">
+                  <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-200/80 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Connected Address:</span>
+                      <span className="font-bold text-zinc-900">{connectedAcc.email}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Provider:</span>
+                      <span className="font-medium text-zinc-800 capitalize">{connectedAcc.provider === 'google' ? 'Google Workspace / Gmail' : connectedAcc.provider === 'microsoft' ? 'Microsoft Outlook 365' : connectedAcc.provider}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Recruiter Profile:</span>
+                      <span className="text-zinc-700">{connectedAcc.recruiter_name}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] text-emerald-700 bg-emerald-50/70 p-2.5 rounded border border-emerald-200/70">
+                    <ShieldCheck size={14} className="shrink-0 text-emerald-600" />
+                    <span>Direct 1-tap OAuth active. Candidate email threads sync automatically.</span>
+                  </div>
+                </div>
               ) : (
-                <div className="text-center py-4">
-                  <Eye className="text-slate-400 mx-auto mb-2" size={32} />
-                  <p className="text-slate-400 text-sm">Viewer mode - Actions disabled</p>
+                <div className="space-y-3 text-xs text-zinc-600">
+                  <p className="leading-relaxed">
+                    Connect your professional email to dispatch candidate correspondence directly from your own domain with <strong>zero app passwords</strong>.
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="p-2.5 rounded-lg border border-zinc-200/80 bg-zinc-50/50 text-center">
+                      <div className="font-bold text-red-600 text-xs">Gmail</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">Google Workspace</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg border border-zinc-200/80 bg-zinc-50/50 text-center">
+                      <div className="font-bold text-blue-600 text-xs">Outlook</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">Office 365</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg border border-zinc-200/80 bg-zinc-50/50 text-center">
+                      <div className="font-bold text-amber-600 text-xs">Zoho</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">Zoho Mail</div>
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>
-          </Card>
-        </div>
-      </div>
+          </div>
 
-      <div className="mt-12">
-        <Card className="glass-card rounded-[3rem] overflow-hidden">
-          <CardHeader className="p-10 pb-6">
-            <CardTitle className="text-2xl font-bold text-[#0F172A]">Department Breakdown</CardTitle>
-            <p className="text-slate-500 text-sm mt-2">Current team distribution across departments</p>
-          </CardHeader>
-          <CardContent className="p-10 pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[
-                { dept: "Engineering", count: 89, growth: "+8 this quarter", color: "bg-blue-500" },
-                { dept: "Product", count: 34, growth: "+3 this quarter", color: "bg-emerald-500" },
-                { dept: "Design", count: 28, growth: "+2 this quarter", color: "bg-purple-500" },
-                { dept: "Marketing", count: 22, growth: "+1 this quarter", color: "bg-amber-500" },
-                { dept: "Sales", count: 31, growth: "+4 this quarter", color: "bg-indigo-500" },
-                { dept: "Operations", count: 18, growth: "Stable", color: "bg-slate-500" },
-                { dept: "Finance", count: 12, growth: "Stable", color: "bg-emerald-600" },
-                { dept: "HR", count: 13, growth: "+2 this quarter", color: "bg-pink-500" }
-              ].map((dept, i) => (
-                <div key={i} className="p-6 rounded-2xl bg-white/50 border border-white/20 hover:bg-white/70 transition-all">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-4 h-4 rounded-full ${dept.color}`}></div>
-                    <h3 className="font-bold text-[#0F172A]">{dept.dept}</h3>
+          <div className="p-5 pt-0 border-t border-zinc-100 mt-2">
+            {emailActive ? (
+              <div className="flex items-center justify-between pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenConnect('email')}
+                  className="h-8 text-xs font-semibold border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:!text-zinc-900"
+                >
+                  Change Email Account
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDisconnectEmail}
+                  className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                >
+                  <Trash2 size={13} />
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => handleOpenConnect('email')}
+                className="w-full h-8.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs gap-1.5 mt-3"
+              >
+                <Mail size={14} />
+                Connect Recruiter Email Mailbox
+                <ArrowRight size={13} />
+              </Button>
+            )}
+          </div>
+        </Card>
+
+        {/* BOX 2: RECRUITER CALENDAR & VIDEO ROOMS */}
+        <Card className="bg-white border border-zinc-200/90 rounded-xl shadow-xs overflow-hidden flex flex-col justify-between">
+          <div>
+            <CardHeader className="p-5 pb-3 border-b border-zinc-100 flex flex-row items-start justify-between space-y-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                  <CalendarIcon size={18} />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                    Recruiter Calendar
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-500">
+                    Auto-generate Google Meet & Teams interview rooms
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge 
+                variant="outline" 
+                className={calendarActive ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]" : "bg-zinc-100 text-zinc-500 border-zinc-200 text-[10px]"}
+              >
+                {calendarActive ? "Calendar Connected" : "Not Connected"}
+              </Badge>
+            </CardHeader>
+
+            <CardContent className="p-5 space-y-4">
+              {calendarActive && connectedAcc ? (
+                <div className="space-y-3">
+                  <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-200/80 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Primary Calendar:</span>
+                      <span className="font-bold text-zinc-900">{connectedAcc.calendar_sync?.calendar_name || 'Primary Recruiter Calendar'}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Default Room Format:</span>
+                      <span className="font-medium text-emerald-700 capitalize font-mono text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {connectedAcc.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet HD'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Calendar Free/Busy:</span>
+                      <span className="text-emerald-700 font-medium">Automatic Conflict Check Active</span>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-3xl font-black text-[#0F172A]">{dept.count}</p>
-                    <p className="text-xs text-slate-500 font-medium">{dept.growth}</p>
+
+                  <div className="flex items-center gap-2 text-[11px] text-emerald-700 bg-emerald-50/70 p-2.5 rounded border border-emerald-200/70">
+                    <ShieldCheck size={14} className="shrink-0 text-emerald-600" />
+                    <span>Real-time availability syncing active. No overlapping candidate slots.</span>
                   </div>
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-3 text-xs text-zinc-600">
+                  <p className="leading-relaxed">
+                    Connect your work calendar to check real-time availability and automatically inject secure video conference rooms into candidate invites.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="p-2.5 rounded-lg border border-zinc-200/80 bg-zinc-50/50 text-center">
+                      <div className="font-bold text-emerald-600 text-xs">Google Meet</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">Google Workspace</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg border border-zinc-200/80 bg-zinc-50/50 text-center">
+                      <div className="font-bold text-indigo-600 text-xs">Microsoft Teams</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">Microsoft 365</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </div>
+
+          <div className="p-5 pt-0 border-t border-zinc-100 mt-2">
+            {calendarActive ? (
+              <div className="flex items-center justify-between pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenConnect('calendar')}
+                  className="h-8 text-xs font-semibold border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:!text-zinc-900"
+                >
+                  Change Calendar
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDisconnectCalendar}
+                  className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                >
+                  <Trash2 size={13} />
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => handleOpenConnect('calendar')}
+                className="w-full h-8.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs gap-1.5 mt-3"
+              >
+                <CalendarIcon size={14} />
+                Connect Recruiter Calendar
+                <ArrowRight size={13} />
+              </Button>
+            )}
+          </div>
+        </Card>
+
+        {/* BOX 3: VIDEO MEETINGS & INTERVIEW ROOMS (MICROSOFT TEAMS & GOOGLE MEET) */}
+        <Card className="bg-white border border-zinc-200/90 rounded-xl shadow-xs overflow-hidden flex flex-col justify-between">
+          <div>
+            <CardHeader className="p-5 pb-3 border-b border-zinc-100 flex flex-row items-start justify-between space-y-0">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-lg border flex items-center justify-center ${
+                  connectedAcc?.calendar_sync?.default_format === 'teams'
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                }`}>
+                  <Video size={18} />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                    Video Meeting Integration
+                  </CardTitle>
+                  <CardDescription className="text-xs text-zinc-500">
+                    Microsoft Teams & Google Meet interview rooms
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge 
+                variant="outline" 
+                className={
+                  videoActive
+                    ? (connectedAcc?.calendar_sync?.default_format === 'teams'
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px]"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]")
+                    : "bg-zinc-100 text-zinc-500 border-zinc-200 text-[10px]"
+                }
+              >
+                {videoActive
+                  ? (connectedAcc?.calendar_sync?.default_format === 'teams' ? "Teams Active" : "Meet Active")
+                  : "Not Connected"}
+              </Badge>
+            </CardHeader>
+
+            <CardContent className="p-5 space-y-4">
+              {videoActive ? (
+                <div className="space-y-3">
+                  {/* Format selection pills */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-semibold text-zinc-500">Default Meeting Room Provider:</label>
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                        {connectedAcc?.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMeetingFormat('google_meet')}
+                        className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                          connectedAcc?.calendar_sync?.default_format !== 'teams'
+                            ? 'border-emerald-600 bg-emerald-50/80 text-emerald-900 ring-1 ring-emerald-600/20'
+                            : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs text-emerald-600">Google Meet</span>
+                          {connectedAcc?.calendar_sync?.default_format !== 'teams' && (
+                            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-zinc-500 leading-tight">Direct HD Rooms (Active)</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMeetingFormat('teams')}
+                        className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                          connectedAcc?.calendar_sync?.default_format === 'teams'
+                            ? 'border-indigo-600 bg-indigo-50/80 text-indigo-900 ring-1 ring-indigo-600/20'
+                            : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs text-indigo-600">Microsoft Teams</span>
+                          {connectedAcc?.calendar_sync?.default_format === 'teams' && (
+                            <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-zinc-500 leading-tight">Nango Integrated</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-200/80 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500">Active Room Format:</span>
+                      <span className="font-bold text-zinc-900">
+                        {connectedAcc?.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500">Provider:</span>
+                      <span className={`font-mono text-[11px] font-semibold px-1.5 py-0.5 rounded border ${
+                        connectedAcc?.calendar_sync?.default_format === 'teams'
+                          ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                          : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                      }`}>
+                        {connectedAcc?.calendar_sync?.default_format === 'teams' ? 'microsoft-teams' : 'google-meet'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500">Auto-Generate Links:</span>
+                      <span className="text-emerald-700 font-medium">Enabled (Direct URL)</span>
+                    </div>
+                  </div>
+
+                  <div className={`flex items-center gap-2 text-[11px] p-2.5 rounded border ${
+                    connectedAcc?.calendar_sync?.default_format === 'teams'
+                      ? 'text-indigo-700 bg-indigo-50/70 border-indigo-200/70'
+                      : 'text-emerald-700 bg-emerald-50/70 border-emerald-200/70'
+                  }`}>
+                    <ShieldCheck size={14} className={`shrink-0 ${
+                      connectedAcc?.calendar_sync?.default_format === 'teams' ? 'text-indigo-600' : 'text-emerald-600'
+                    }`} />
+                    <span>Interview invites automatically include your chosen video room link.</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 text-xs text-zinc-600">
+                  <p className="leading-relaxed">
+                    Connect your preferred video conferencing provider to automatically generate live interview room links (Google Meet or Microsoft Teams) when scheduling candidates.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="p-3 rounded-lg border border-zinc-200/80 bg-zinc-50/50 text-left">
+                      <div className="font-bold text-emerald-700 text-xs flex items-center gap-1.5">
+                        <Video size={13} />
+                        Google Meet
+                      </div>
+                      <div className="text-[10px] text-zinc-500 mt-1">Direct HD video rooms via Google Calendar</div>
+                    </div>
+                    <div className="p-3 rounded-lg border border-zinc-200/80 bg-zinc-50/50 text-left">
+                      <div className="font-bold text-indigo-700 text-xs flex items-center gap-1.5">
+                        <Video size={13} />
+                        Microsoft Teams
+                      </div>
+                      <div className="text-[10px] text-zinc-500 mt-1">Enterprise team rooms with Office 365</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </div>
+
+          <div className="p-5 pt-0 border-t border-zinc-100 mt-2">
+            {videoActive ? (
+              <div className="flex items-center justify-between pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenConnect('meeting')}
+                  className="h-8 text-xs font-semibold border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:!text-zinc-900"
+                >
+                  Change Meeting Provider
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDisconnectMeeting}
+                  className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1 cursor-pointer"
+                >
+                  <Trash2 size={13} />
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => handleOpenConnect('meeting')}
+                className="w-full h-8.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs gap-1.5 mt-3 cursor-pointer"
+              >
+                <Video size={14} />
+                Connect Video Meeting Rooms
+                <ArrowRight size={13} />
+              </Button>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* CLOUD-READY PROFILE (AI SCREENING CONFIGURATION REMOVED AS REQUESTED) */}
+      <div className="grid grid-cols-1 gap-5">
+        
+        {/* Organization Profile */}
+        <Card className="bg-white border border-zinc-200/90 shadow-xs rounded-xl overflow-hidden">
+          <CardHeader className="p-5 pb-3 border-b border-zinc-100">
+            <CardTitle className="text-sm font-bold text-zinc-900 flex items-center gap-2">
+              <Building2 size={16} className="text-zinc-600" />
+              Organization Profile
+            </CardTitle>
+            <CardDescription className="text-xs text-zinc-500">
+              Branding and corporate metadata displayed on candidate portals.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-700">Company Name</Label>
+                <Input 
+                  value={profile.companyName}
+                  onChange={(e) => setProfile({ ...profile, companyName: e.target.value })}
+                  className="h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-700">Industry / Domain</Label>
+                <Input 
+                  value={profile.industry}
+                  onChange={(e) => setProfile({ ...profile, industry: e.target.value })}
+                  className="h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-700">Recruiting Contact Email</Label>
+                <Input 
+                  value={profile.hiringEmail}
+                  onChange={(e) => setProfile({ ...profile, hiringEmail: e.target.value })}
+                  className="h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-700">Headquarters / Location</Label>
+                <Input 
+                  value={profile.location}
+                  onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                  className="h-9 text-xs rounded-md border-zinc-200 focus-visible:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-zinc-100">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-700 flex items-center gap-1.5">
+                  <Globe size={13} className="text-emerald-600" />
+                  Primary Operating Timezone
+                </Label>
+                <div className="h-9 px-3 rounded-md bg-zinc-50 border border-zinc-200 flex items-center justify-between text-xs text-zinc-800 font-mono font-medium max-w-xl">
+                  <span>{Intl.DateTimeFormat().resolvedOptions().timeZone} ({new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || 'Local'})</span>
+                  <span className="text-[10px] text-emerald-700 font-sans font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    System Detected
+                  </span>
+                </div>
+                <span className="text-[10px] text-zinc-400 block">Candidate interview sessions and calendar invites automatically align with your local system timezone.</span>
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Clean Profile & Demo Reset Card */}
+        <Card className="border border-red-200 bg-red-50/20 shadow-2xs rounded-xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-red-100 bg-red-50/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trash2 size={16} className="text-red-600" />
+                <CardTitle className="text-sm font-bold text-red-950">Clean Profile & Data Reset</CardTitle>
+              </div>
+              <Badge variant="outline" className="text-[10px] bg-white text-red-700 border-red-300">
+                Testing Utility
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-red-800/80 mt-1">
+              Clear all demo jobs, candidates, resumes, interview schedules, and connected accounts to test HireForce as a brand new profile.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 flex items-center justify-between flex-wrap gap-4">
+            <div className="text-xs text-zinc-600 max-w-lg">
+              Clicking this button wipes all local and Supabase data (jobs, candidates, interview events) and removes any email/calendar connections, leaving your workspace completely clean.
+            </div>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isResetting}
+              onClick={handleResetAllDemoData}
+              className="text-xs font-semibold gap-1.5 shadow-2xs cursor-pointer bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isResetting ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin" />
+                  <span>Clearing All Data...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 size={13} />
+                  <span>Clear All Data (Start Fresh)</span>
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Connect Modal */}
+      <ConnectWorkAccountModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        category={modalCategory}
+        initialProviderId={modalProviderId}
+        onSuccess={() => {
+          setConnectedAcc(getConnectedAccount());
+        }}
+      />
     </DashboardLayout>
   );
 };

@@ -1,10 +1,20 @@
+/* Universal Font Enforcement - Inter (GHL CRM Standard) */
+html, body, button, input, select, textarea, h1, h2, h3, h4, h5, h6, p, span, a, label, div {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Global CSS Reset - Comprehensive Scaling Fix */
 @layer base {
-  /* Force consistent base font size across all environments */
   html {
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
@@ -12,9 +22,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
-    /* Prevent any zoom scaling */
-    zoom: 1;
-    /* Ensure consistent rendering */
     text-rendering: optimizeLegibility;
   }
 
@@ -22,45 +29,43 @@
     margin: 0;
     padding: 0;
     width: 100%;
-    height: 100%;
+    min-height: 100%;
   }
 
   body {
     margin: 0;
     padding: 0;
     line-height: 1.5;
-    font-size: 1rem;
+    font-size: 0.9375rem;
   }
 
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     box-sizing: border-box;
   }
 }
 
 @layer base {
   :root {
-    --background: 160 100% 98%;
-    --foreground: 160 40% 10%;
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 160 40% 10%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 160 40% 10%;
-    --primary: 160 100% 45%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 158 64% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 160 30% 96%;
-    --secondary-foreground: 160 40% 15%;
-    --muted: 160 30% 96%;
-    --muted-foreground: 160 20% 45%;
-    --accent: 170 100% 48%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 158 64% 45%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 160 30% 90%;
-    --input: 160 30% 90%;
-    --ring: 160 100% 45%;
-    --radius: 1.25rem;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 158 64% 45%;
+    --radius: 0.5rem;
   }
 }
 
@@ -69,45 +74,52 @@
     @apply border-border;
   }
   body {
-    @apply text-foreground antialiased selection:bg-emerald-200 selection:text-emerald-900;
-    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdfa 100%);
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    @apply text-foreground antialiased selection:bg-emerald-100 selection:text-emerald-900 bg-[#FAFAFA];
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 }
 
 .glass-card {
-  @apply bg-white border border-gray-200 shadow-sm;
+  @apply bg-white border border-zinc-200 shadow-sm rounded-lg;
 }
 
-.sidebar-glass {
-  @apply bg-white border-r border-gray-200;
+.sidebar-dark {
+  background-color: #18181B;
 }
 
-.mesh-gradient {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+.emerald-glow {
+  box-shadow: 0 0 15px -3px rgba(16, 185, 129, 0.4);
 }
 
-.vision-gradient {
-  background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%);
-}
-
-.vision-gradient-text {
-  background: linear-gradient(135deg, #00F5A0 0%, #00D9F5 100%);
+.gradient-text {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
-.vision-button {
-  background: linear-gradient(135deg, #00F5A0 0%, #00D9F5 100%);
-  transition: all 0.3s ease;
+
+.font-serif {
+  font-family: 'Playfair Display', 'Instrument Serif', Georgia, serif !important;
 }
 
-.vision-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 40px rgba(0, 245, 160, 0.3);
+.font-sans-luxury {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif !important;
 }
 
-.vision-glow {
-  box-shadow: 0 0 60px rgba(0, 245, 160, 0.2);
+.luxury-dot-grid {
+  background-image: radial-gradient(#10B981 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@keyframes spinConic {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-conic {
+  animation: spinConic 4s linear infinite;
 }
