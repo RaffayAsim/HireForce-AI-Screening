@@ -1,8 +1,32 @@
 import http from 'http';
-import { URL } from 'url';
+import { URL, fileURLToPath } from 'url';
+import fs from 'fs';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Auto-load .env into process.env if present
+try {
+  const envFile = path.resolve(__dirname, '../.env');
+  if (fs.existsSync(envFile)) {
+    const lines = fs.readFileSync(envFile, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+        const idx = trimmed.indexOf('=');
+        const k = trimmed.slice(0, idx).trim();
+        const v = trimmed.slice(idx + 1).trim();
+        if (!process.env[k]) process.env[k] = v;
+      }
+    }
+  }
+} catch {}
 
 // Map of route patterns to file paths
 const routes = [
+  { pattern: /^\/api\/auth\/login(?:\?.*)?$/, file: '../api/auth/session.ts' },
+  { pattern: /^\/api\/auth\/signup(?:\?.*)?$/, file: '../api/auth/session.ts' },
   { pattern: /^\/api\/auth\/session(?:\?.*)?$/, file: '../api/auth/session.ts' },
   { pattern: /^\/api\/apply(?:\?.*)?$/, file: '../api/apply.ts' },
   { pattern: /^\/api\/candidates\/([^/?]+)(?:\?.*)?$/, file: '../api/candidates/[id].ts', isParam: true },

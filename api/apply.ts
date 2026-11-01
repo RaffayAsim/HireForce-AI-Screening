@@ -17,7 +17,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://fobfgvmwfzoxzzcheusm.supabase.co";
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvYmZndm13ZnpveHp6Y2hldXNtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzIxMzE2MCwiZXhwIjoyMTA4Nzg5MTYwfQ.WwWjdxSzQTdWIeMzb8HrtA6mTlB595mUEn_0M8zVWCE";
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
   const sb = createClient(supabaseUrl, supabaseKey);
 
   try {
@@ -130,14 +130,10 @@ export default async function handler(req: any, res: any) {
           })
         }).catch(e => console.warn("Background email dispatch in /api/apply:", e));
 
-        // 2. Trigger automated screening evaluation via /api/screen-candidate
-        const screenPromise = fetch(`${baseUrl}/api/screen-candidate`, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${serverToken}`
-          },
-          body: JSON.stringify({
+        // 2. Trigger automated screening evaluation directly server-side (service role)
+        const screenPromise = (async () => {
+          const mod = await import("./screen-candidate.ts").catch(() => import("./screen-candidate.js" as any));
+          return mod.evaluateCandidate({
             candidateId: candidateRecord.id,
             candidateName: candidateRecord.full_name,
             candidateEmail: candidateRecord.email,
@@ -147,8 +143,8 @@ export default async function handler(req: any, res: any) {
             resumeUrl: candidateRecord.resume_url,
             resumeText: resume_text || "",
             userId: jobOwnerId
-          })
-        }).catch(e => console.warn("Background screening dispatch in /api/apply:", e));
+          });
+        })().catch(e => console.warn("Background screening evaluation in /api/apply:", e));
 
         await Promise.allSettled([emailPromise, screenPromise]);
       } catch (bgErr) {

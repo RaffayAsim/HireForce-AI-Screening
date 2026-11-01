@@ -17,7 +17,7 @@ export const cleanText = (str: string): string => {
   }
 };
 import backupData from './backupData.json';
-import { getAuthHeaders } from './authHeader';
+import { getAuthHeaders, apiFetch } from './authHeader';
 
 const JOBS_STORAGE_KEY = 'hireforce_local_jobs';
 const CANDIDATES_STORAGE_KEY = 'hireforce_local_candidates';
@@ -166,12 +166,8 @@ export const saveLocalCandidate = (candidate: Partial<LocalCandidate>): LocalCan
 
   // Sync to persistent server file across tabs and sessions
   try {
-    fetch('/api/candidates', {
+    apiFetch('/api/candidates', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(newCandidate.user_id)
-      },
       body: JSON.stringify(newCandidate),
     }).catch(() => { });
   } catch { }
@@ -198,9 +194,8 @@ export const updateLocalCandidateStatus = (candidateId: string, status: LocalCan
 
   // Sync to persistent server file
   try {
-    fetch(`/api/candidates/${candidateId}`, {
+    apiFetch(`/api/candidates/${candidateId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         status,
         ...(score !== undefined && { screening_score: score }),
@@ -232,9 +227,8 @@ export const updateLocalCandidate = (candidateId: string, updates: Partial<Local
 
   // Sync to persistent server file
   try {
-    fetch(`/api/candidates/${candidateId}`, {
+    apiFetch(`/api/candidates/${candidateId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     }).catch(() => { });
   } catch { }

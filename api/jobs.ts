@@ -11,13 +11,21 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://fobfgvmwfzoxzzcheusm.supabase.co";
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvYmZndm13ZnpveHp6Y2hldXNtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzIxMzE2MCwiZXhwIjoyMTA4Nzg5MTYwfQ.WwWjdxSzQTdWIeMzb8HrtA6mTlB595mUEn_0M8zVWCE";
-  const sb = createClient(supabaseUrl, supabaseKey);
-
-  // 1. Unauthenticated or Public GET request
+  // 1. Check public vs authenticated access
   const isPublic = req.query?.public === "true" || req.query?.public === true;
   const jobId = req.query?.id || req.query?.jobId;
+
+  let authUser: any = null;
+  if (!isPublic) {
+    authUser = await verifyAuth(req);
+    if (!authUser || !authUser.userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized: Missing or invalid authentication token" });
+    }
+  }
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://fobfgvmwfzoxzzcheusm.supabase.co";
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const sb = createClient(supabaseUrl, supabaseKey);
 
   if (req.method === "GET" && isPublic) {
     try {
@@ -43,12 +51,6 @@ export default async function handler(req: any, res: any) {
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
-  }
-
-  // 2. All other actions require valid recruiter authentication
-  const authUser = await verifyAuth(req);
-  if (!authUser || !authUser.userId) {
-    return res.status(401).json({ success: false, error: "Unauthorized: Missing or invalid authentication token" });
   }
 
   const effectiveUserId = authUser.userId;

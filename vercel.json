@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/auth/login",
+      "destination": "/api/auth/session?action=login"
+    },
+    {
+      "source": "/api/auth/signup",
+      "destination": "/api/auth/session?action=signup"
+    },
+    {
       "source": "/api/test-smtp",
       "destination": "/api/emails/send?action=test-smtp"
     },

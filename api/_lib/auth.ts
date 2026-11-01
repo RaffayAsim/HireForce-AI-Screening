@@ -3,6 +3,26 @@ import crypto from "crypto";
 // Server-only secret - NEVER VITE_ prefixed and NEVER exposed to client
 export const AUTH_SECRET = process.env.AUTH_SECRET || "hireforce_server_auth_secret_k8f9a2b4c6e8d1";
 
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash || !storedHash.includes(":")) return false;
+  try {
+    const [salt, key] = storedHash.split(":");
+    const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+    const keyBuf = Buffer.from(key, "hex");
+    const hashBuf = Buffer.from(hash, "hex");
+    if (keyBuf.length !== hashBuf.length) return false;
+    return crypto.timingSafeEqual(keyBuf, hashBuf);
+  } catch {
+    return false;
+  }
+}
+
 export function createSessionToken(tenantId: string, expiresInHours = 12): string {
   const now = Math.floor(Date.now() / 1000);
   const payload = {

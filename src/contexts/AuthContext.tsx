@@ -11,7 +11,7 @@ export interface TenantUser {
   id: string;
   companyName: string;
   username: string;
-  password: string;
+  password?: string;
   n8nWebhookUrl: string;
   supabaseUrl: string;
   supabaseKey: string;
@@ -30,7 +30,7 @@ export interface TenantUser {
 
 interface AuthContextType {
   user: TenantUser | null;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   isAdmin: boolean;
   isPro: boolean;
@@ -60,7 +60,6 @@ const ADMIN_USER: TenantUser = {
   id: 'admin-001',
   companyName: 'HireForce',
   username: 'admin@vision.ai',
-  password: 'VisionAdmin2024!',
   n8nWebhookUrl: ENV_N8N_URL,
   supabaseUrl: ENV_SUPABASE_URL,
   supabaseKey: ENV_SUPABASE_KEY,
@@ -76,7 +75,6 @@ const DEFAULT_TENANT: TenantUser = {
   id: 'tenant-001',
   companyName: 'HireFlow Demo',
   username: 'demo@hireflow.ai',
-  password: 'DemoPass123!',
   n8nWebhookUrl: ENV_N8N_URL,
   supabaseUrl: ENV_SUPABASE_URL,
   supabaseKey: ENV_SUPABASE_KEY,
@@ -87,33 +85,12 @@ const DEFAULT_TENANT: TenantUser = {
   maxJobs: Infinity,
 };
 
-const STORAGE_KEY = 'vision_users';
 const AUTH_KEY = 'vision_auth';
 
-// Auto-reset stale client candidate caches and upgrade quotas to 50
-if (typeof window !== 'undefined' && localStorage.getItem('vision_reset_v7') !== 'true') {
+// Clean legacy localStorage credentials
+if (typeof window !== 'undefined') {
   try {
-    localStorage.removeItem('vision_local_candidates');
-    const authRaw = localStorage.getItem(AUTH_KEY);
-    if (authRaw) {
-      const parsed = JSON.parse(authRaw);
-      parsed.usageCount = 0;
-      parsed.maxScans = 50;
-      parsed.maxJobs = 25;
-      localStorage.setItem(AUTH_KEY, JSON.stringify(parsed));
-    }
-    const usersRaw = localStorage.getItem(STORAGE_KEY);
-    if (usersRaw) {
-      const users: TenantUser[] = JSON.parse(usersRaw);
-      const upgraded = users.map(u => {
-        if (u.userType === 'trial') {
-          return { ...u, maxScans: 50, maxJobs: 25, usageCount: 0 };
-        }
-        return u;
-      });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(upgraded));
-    }
-    localStorage.setItem('vision_reset_v7', 'true');
+    localStorage.removeItem('vision_users');
   } catch {}
 }
 
@@ -123,74 +100,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const session = localStorage.getItem(AUTH_KEY);
       if (!session) return null;
-      const parsed = JSON.parse(session);
-      if (parsed && parsed.userType === 'trial') {
-        parsed.maxJobs = Math.max(parsed.maxJobs || 25, 25);
-        parsed.maxScans = Math.max(parsed.maxScans || 50, 50);
-        try { localStorage.setItem(AUTH_KEY, JSON.stringify(parsed)); } catch {}
-      }
-      return parsed;
+      return JSON.parse(session);
     } catch {
       return null;
     }
   });
   const [quotaStatus, setQuotaStatus] = useState<{ scansExhausted: boolean; jobsExhausted: boolean; updatedAt?: string | null } | null>(null);
 
-  // Initialize default users on mount
+  // Validate session on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      // Initialize with default users
-      const defaultUsers = [ADMIN_USER, DEFAULT_TENANT];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUsers));
-    } else {
-      try {
-        const users: TenantUser[] = JSON.parse(stored);
-        let changed = false;
-        const upgraded = users.map(u => {
-          if (u.userType === 'trial') {
-            const newJobs = Math.max(u.maxJobs || 25, 25);
-            const newScans = Math.max(u.maxScans || 50, 50);
-            if (u.maxJobs !== newJobs || u.maxScans !== newScans) {
-              changed = true;
-              return { ...u, maxJobs: newJobs, maxScans: newScans };
-            }
-          }
-          return u;
-        });
-        if (changed) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(upgraded));
-        }
-      } catch {}
-    }
-    
-    // Check for existing session
-    const session = localStorage.getItem(AUTH_KEY);
-    if (session) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('vision_token') : null;
+    const session = typeof window !== 'undefined' ? localStorage.getItem(AUTH_KEY) : null;
+
+    if (token && session) {
       try {
         const parsed = JSON.parse(session);
-        if (parsed && parsed.userType === 'trial') {
-          parsed.maxJobs = Math.max(parsed.maxJobs || 25, 25);
-          parsed.maxScans = Math.max(parsed.maxScans || 50, 50);
-          try { localStorage.setItem(AUTH_KEY, JSON.stringify(parsed)); } catch {}
-        }
         setUser(parsed);
-        if (parsed?.id && !localStorage.getItem('vision_token')) {
-          fetch('/api/auth/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tenantId: parsed.id,
-              userId: parsed.id,
-              email: parsed.email || parsed.username,
-            }),
-          }).then(r => r.json()).then(data => {
+
+        // Verify and refresh session token with server
+        fetch('/api/auth/session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        }).then(async (r) => {
+          if (r.ok) {
+            const data = await r.json();
             if (data?.token) setAuthToken(data.token);
-          }).catch(() => {});
-        }
+          } else if (r.status === 401) {
+            setUser(null);
+            removeAuthToken();
+            localStorage.removeItem(AUTH_KEY);
+          }
+        }).catch(() => {});
       } catch {
+        setUser(null);
+        removeAuthToken();
         localStorage.removeItem(AUTH_KEY);
       }
+    } else {
+      setUser(null);
+      removeAuthToken();
+      localStorage.removeItem(AUTH_KEY);
     }
   }, []);
 
@@ -288,46 +240,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user?.id, user?.userType]);
 
-  const login = (username: string, password: string): boolean => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const users: TenantUser[] = stored ? JSON.parse(stored) : [ADMIN_USER, DEFAULT_TENANT];
-    
-    console.log('🔐 Login attempt:', { username });
-    console.log('📋 Available users:', users.map(u => ({ username: u.username, userType: u.userType })));
-    const cleanInput = username.trim().toLowerCase();
-    const found = users.find(u => 
-      (u.username.toLowerCase() === cleanInput || (u.email && u.email.toLowerCase() === cleanInput)) && 
-      u.password === password
-    );
-    
-    if (found) {
-      console.log('✅ User found:', { username: found.username, userType: found.userType, isAdmin: found.isAdmin });
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const cleanEmail = username.trim().toLowerCase();
+      console.log('🔐 Server login attempt for:', cleanEmail);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      });
+
+      if (!res.ok) {
+        console.warn('❌ Login failed with status:', res.status);
+        return false;
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.token) {
+        console.warn('❌ Login failed:', data.error);
+        return false;
+      }
+
       // Clear previous local tenant candidate caches
       try {
         localStorage.removeItem('vision_local_candidates');
         localStorage.removeItem('hireforce_local_candidates');
       } catch {}
-      setUser(found);
-      localStorage.setItem(AUTH_KEY, JSON.stringify(found));
 
-      // Obtain cryptographically signed server session token
-      fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: found.id,
-          userId: found.id,
-          email: found.email || found.username,
-        }),
-      }).then(r => r.json()).then(data => {
-        if (data?.token) setAuthToken(data.token);
-      }).catch(() => {});
+      setAuthToken(data.token);
 
+      const loggedUser: TenantUser = {
+        id: data.user.tenantId || data.user.id,
+        companyName: data.user.company || 'Hiring Workspace',
+        username: data.user.email,
+        email: data.user.email,
+        fullName: data.user.name,
+        userType: data.user.userType || 'pro',
+        isAdmin: data.user.userType === 'admin',
+        n8nWebhookUrl: ENV_N8N_URL,
+        supabaseUrl: ENV_SUPABASE_URL,
+        supabaseKey: ENV_SUPABASE_KEY,
+        createdAt: new Date().toISOString(),
+        maxScans: data.user.userType === 'trial' ? 50 : Infinity,
+        maxJobs: data.user.userType === 'trial' ? 25 : Infinity,
+      };
+
+      setUser(loggedUser);
+      localStorage.setItem(AUTH_KEY, JSON.stringify(loggedUser));
       return true;
+    } catch (err) {
+      console.error('Login error:', err);
+      return false;
     }
-    
-    console.warn('❌ Login failed: User not found or password incorrect');
-    return false;
   };
 
   const logout = () => {
@@ -428,14 +392,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateUserInStorage = (updatedUser: TenantUser) => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-    
-    const users: TenantUser[] = JSON.parse(stored);
-    const updatedUsers = users.map(u => 
-      u.id === updatedUser.id ? updatedUser : u
-    );
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUsers));
+    localStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
   };
 
   return (
@@ -468,7 +425,7 @@ export const useAuth = () => {
       const cachedUser = raw ? JSON.parse(raw) : null;
       return {
         user: cachedUser,
-        login: () => false,
+        login: async () => false,
         logout: () => {},
         isAdmin: cachedUser?.userType === 'admin',
         isPro: cachedUser?.userType === 'pro',
@@ -491,8 +448,7 @@ export const useAuth = () => {
 
 // Helper functions for admin management
 export const getAllUsers = (): TenantUser[] => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return stored ? JSON.parse(stored) : [ADMIN_USER, DEFAULT_TENANT];
+  return [ADMIN_USER, DEFAULT_TENANT];
 };
 
 export const getTrialUsers = (): TenantUser[] => {
@@ -501,37 +457,15 @@ export const getTrialUsers = (): TenantUser[] => {
 };
 
 export const addUser = (user: Omit<TenantUser, 'id' | 'createdAt'>): TenantUser => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  const users: TenantUser[] = stored ? JSON.parse(stored) : [ADMIN_USER, DEFAULT_TENANT];
-  
-  // For trial users, assign shared API credentials if not provided
-  const userWithCredentials = user.userType === 'trial' && !user.n8nWebhookUrl
-    ? {
-        ...user,
-        n8nWebhookUrl: MASTER_API_CONFIG.n8nWebhookUrl,
-        supabaseUrl: MASTER_API_CONFIG.supabaseUrl,
-        supabaseKey: MASTER_API_CONFIG.supabaseKey,
-      }
-    : user;
-  
   const newUser: TenantUser = {
-    ...userWithCredentials,
+    ...user,
     id: `tenant-${Date.now()}`,
     createdAt: new Date().toISOString(),
   };
-  
-  users.push(newUser);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
   return newUser;
 };
 
-export const deleteUser = (userId: string): boolean => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return false;
-  
-  const users: TenantUser[] = JSON.parse(stored);
-  const filtered = users.filter(u => u.id !== userId && !u.isAdmin); // Prevent deleting admin
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+export const deleteUser = (_userId: string): boolean => {
   return true;
 };
 
@@ -555,11 +489,8 @@ export const MASTER_API_CONFIG = {
   supabaseKey: ENV_SUPABASE_KEY,
 };
 
-// Reset localStorage to clear corrupted state
+// Reset auth storage
 export const resetAuthStorage = () => {
-  localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(AUTH_KEY);
-  const defaultUsers = [ADMIN_USER, DEFAULT_TENANT];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUsers));
-  console.log('🔄 Auth storage reset. Default users reinitialized.');
+  removeAuthToken();
 };

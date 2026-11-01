@@ -193,19 +193,6 @@ export default function AuthFlow({ initialMode = "signup" }: AuthFlowProps) {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const allUsers = getAllUsers();
-      const existingUser = allUsers.find(
-        (u) =>
-          u.username.toLowerCase() === normalizedEmail ||
-          (u.email && u.email.toLowerCase() === normalizedEmail)
-      );
-
-      if (existingUser) {
-        showError("An account with this email already exists. Please sign in instead.");
-        setMode("signin");
-        setIsSubmitting(false);
-        return;
-      }
 
       if (role === "in_house" && !companyName.trim()) {
         showError("Please enter your company name");
@@ -218,20 +205,24 @@ export default function AuthFlow({ initialMode = "signup" }: AuthFlowProps) {
         (role === "freelance" ? `${fullName.trim()} (Independent Recruiter)` : "My Company");
       const finalLocation = officeLocation.trim() || "Global Remote";
 
-      // Register new trial user
-      addUser({
-        companyName: finalCompany,
-        username: normalizedEmail,
-        password: password,
-        userType: "trial",
-        fullName: fullName.trim(),
-        email: normalizedEmail,
-        phone: phone.trim(),
-        maxScans: 50,
-        maxJobs: 25,
-        usageCount: 0,
-        jobCount: 0,
+      // Register new trial user server-side
+      const signupRes = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password: password,
+          name: fullName.trim(),
+          company: finalCompany,
+        }),
       });
+
+      const signupData = await signupRes.json();
+      if (!signupRes.ok || !signupData.success) {
+        showError(signupData.error || "Failed to create account. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
 
       // Save initial defaults
       try {
@@ -252,7 +243,7 @@ export default function AuthFlow({ initialMode = "signup" }: AuthFlowProps) {
       } catch {}
 
       // Log in
-      const success = login(normalizedEmail, password);
+      const success = await login(normalizedEmail, password);
       if (success) {
         showSuccess(`Welcome, ${fullName.trim()}! Your 50 free AI scans are ready.`);
         navigate("/dashboard");
@@ -273,7 +264,7 @@ export default function AuthFlow({ initialMode = "signup" }: AuthFlowProps) {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const success = login(normalizedEmail, password);
+      const success = await login(normalizedEmail, password);
 
       if (success) {
         showSuccess("Signed in successfully");

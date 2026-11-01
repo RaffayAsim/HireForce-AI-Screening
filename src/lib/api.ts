@@ -1,6 +1,6 @@
 import { triggerAutomation } from './automationService';
 import { supabase, isSupabaseConfigured } from './supabase';
-import { getAuthHeaders } from './authHeader';
+import { getAuthHeaders, apiFetch } from './authHeader';
 import { 
   getLocalJobs, 
   getLocalCandidates, 
@@ -241,26 +241,11 @@ export const subscribeToCandidates = (callback: (candidates: any[]) => void, use
   if (isSupabaseConfigured) {
     const fetchRemoteCandidates = async () => {
       try {
-        const res = await fetch('/api/candidates', {
-          headers: {
-            ...getAuthHeaders(effectiveUserId),
-          },
-        });
+        const res = await apiFetch('/api/candidates');
         if (res.ok) {
           const json = await res.json();
           const data = json.candidates;
           if (Array.isArray(data)) {
-            // Sync any newly screened summaries from API into local cache
-            data.forEach(rc => {
-              if (rc.id && rc.screening_summary) {
-                updateLocalCandidate(rc.id, {
-                  screening_score: rc.screening_score,
-                  screening_summary: rc.screening_summary,
-                  status: rc.status || 'new',
-                });
-              }
-            });
-
             // Update user-scoped cache (never merge foreign candidates)
             if (typeof window !== 'undefined') {
               try {
@@ -463,12 +448,8 @@ export const screenCandidateWithAI = async (params: {
   userId?: string;
 }) => {
   try {
-    const res = await fetch('/api/screen-candidate', {
+    const res = await apiFetch('/api/screen-candidate', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(params.userId)
-      },
       body: JSON.stringify({
         candidateId: params.candidateId,
         candidateName: params.candidateName,
@@ -506,12 +487,8 @@ export const screenCandidateWithAI = async (params: {
         }
 
         // Sync to server database - preserve candidate stage
-        fetch(`/api/candidates/${params.candidateId}`, {
+        apiFetch(`/api/candidates/${params.candidateId}`, {
           method: 'PATCH',
-          headers: { 
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(params.userId)
-          },
           body: JSON.stringify({
             screening_score: sc.score,
             screening_summary: sc.summary,
@@ -548,12 +525,8 @@ export type { Candidate, Job } from './supabase';
 export const updateCandidateStatus = async (candidateId: string, status: any, score?: number, summary?: string) => {
   updateLocalCandidateStatus(candidateId, status, score, summary);
   try {
-    fetch(`/api/candidates/${candidateId}`, {
+    apiFetch(`/api/candidates/${candidateId}`, {
       method: 'PATCH',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
       body: JSON.stringify({
         status,
         ...(score !== undefined && { screening_score: score }),
@@ -566,12 +539,8 @@ export const updateCandidateStatus = async (candidateId: string, status: any, sc
 export const updateCandidateJob = async (candidateId: string, jobId: string) => {
   updateLocalCandidate(candidateId, { job_id: jobId });
   try {
-    fetch(`/api/candidates/${candidateId}`, {
+    apiFetch(`/api/candidates/${candidateId}`, {
       method: 'PATCH',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
       body: JSON.stringify({ job_id: jobId }),
     }).catch(() => {});
   } catch {}
@@ -580,12 +549,8 @@ export const updateCandidateJob = async (candidateId: string, jobId: string) => 
 export const updateJobInSupabase = async (jobId: string, updates: any) => {
   updateLocalJob(jobId, updates);
   try {
-    fetch('/api/jobs', {
+    apiFetch('/api/jobs', {
       method: 'PATCH',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
       body: JSON.stringify({ id: jobId, ...updates }),
     }).catch(() => {});
   } catch (err) {

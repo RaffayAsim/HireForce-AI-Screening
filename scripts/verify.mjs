@@ -6,6 +6,23 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Auto-load .env into process.env if present
+try {
+  const envFile = path.resolve(__dirname, '../.env');
+  if (fs.existsSync(envFile)) {
+    const lines = fs.readFileSync(envFile, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+        const idx = trimmed.indexOf('=');
+        const k = trimmed.slice(0, idx).trim();
+        const v = trimmed.slice(idx + 1).trim();
+        if (!process.env[k]) process.env[k] = v;
+      }
+    }
+  }
+} catch {}
+
 // 1. Environment & Config
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fobfgvmwfzoxzzcheusm.supabase.co';
@@ -64,39 +81,63 @@ async function run() {
     }
   }
 
-  // Obtain real server-issued tokens
-  console.log('--- Obtaining Real Server Tokens ---');
+  // Obtain real server-issued tokens & verify login security
+  console.log('--- Obtaining Real Server Tokens & Verifying Auth Security ---');
   let r1Token = '';
   let r2Token = '';
 
   try {
-    const r1Login = await fetch(`${BASE_URL}/api/auth/session`, {
+    // Check 0.1: /api/auth/session with tenantId in body and no Bearer token returns 401
+    const sessionNoAuth = await fetch(`${BASE_URL}/api/auth/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tenantId: R1_TENANT })
     });
+    report(sessionNoAuth.status === 401, 'Auth: /api/auth/session with tenantId and no credentials returns 401');
+
+    // Check 0.2: /api/auth/login with wrong password returns 401
+    const wrongLogin = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'hfqa209871@maxxspace.com', password: 'IncorrectPassword999!' })
+    });
+    report(wrongLogin.status === 401, 'Auth: /api/auth/login with wrong password returns 401');
+
+    // Check 0.3: /api/auth/login with correct password returns 200 + signed token
+    const r1Login = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'hfqa209871@maxxspace.com', password: 'HireForce2024!' })
+    });
     const r1Data = await r1Login.json();
     if (r1Login.ok && r1Data.token) {
       r1Token = r1Data.token;
-      console.log(`R1 Token obtained successfully (tenant: ${R1_TENANT})`);
+      report(true, 'Auth: R1 login returns 200 and server-signed token', `tenant: ${r1Data.user?.tenantId || R1_TENANT}`);
     } else {
-      console.error(`Failed to obtain R1 token: ${JSON.stringify(r1Data)}`);
+      report(false, 'Auth: R1 login failed', JSON.stringify(r1Data));
     }
 
-    const r2Login = await fetch(`${BASE_URL}/api/auth/session`, {
+    // Check 0.4: Token from login works on /api/candidates
+    const candCheck = await fetch(`${BASE_URL}/api/candidates`, {
+      headers: { 'Authorization': `Bearer ${r1Token}` }
+    });
+    report(candCheck.ok, 'Auth: Token from login works on /api/candidates', `status: ${candCheck.status}`);
+
+    // Check 0.5: R2 login
+    const r2Login = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenantId: R2_TENANT })
+      body: JSON.stringify({ email: 'q4rec2858070@fldubai.com', password: 'HireForce2024!' })
     });
     const r2Data = await r2Login.json();
     if (r2Login.ok && r2Data.token) {
       r2Token = r2Data.token;
-      console.log(`R2 Token obtained successfully (tenant: ${R2_TENANT})\n`);
+      report(true, 'Auth: R2 login returns 200 and server-signed token', `tenant: ${r2Data.user?.tenantId || R2_TENANT}`);
     } else {
-      console.error(`Failed to obtain R2 token: ${JSON.stringify(r2Data)}`);
+      report(false, 'Auth: R2 login failed', JSON.stringify(r2Data));
     }
   } catch (err) {
-    console.error('Error contacting auth endpoint:', err.message);
+    report(false, 'Error during auth verification', err.message);
   }
 
   // CHECK 1: Supabase RLS
@@ -498,6 +539,99 @@ async function run() {
     }
   } catch (err) {
     report(false, 'Speed benchmark failed', err.message);
+  }
+
+  // CHECK 6.1: Automated Server Screening (Fix 2 Verification: within 30s final score saved)
+  console.log('\n--- CHECK 6.1: Automated Server Screening Evaluation (Saved in Supabase within 30s) ---');
+  try {
+    const autoCands = [
+      {
+        id: `cand-auto-react-${Date.now()}`,
+        name: 'Auto React Dev',
+        email: 'auto.react@example.com',
+        resume: 'Frontend Developer focused on React, TypeScript, Next.js, Redux, Tailwind CSS, component testing.',
+        min: 30,
+        max: 45,
+        target: 38
+      },
+      {
+        id: `cand-auto-ops-${Date.now()}`,
+        name: 'Auto Ops Specialist',
+        email: 'auto.ops@example.com',
+        resume: 'Sales Operations Coordinator with extensive experience in Salesforce CRM, HubSpot, Excel VLOOKUP, pivot tables, pipeline reporting, and lead gen.',
+        min: 70,
+        max: 95,
+        target: 89
+      },
+      {
+        id: `cand-auto-mkt-${Date.now()}`,
+        name: 'Auto Marketing Spec',
+        email: 'auto.mkt@example.com',
+        resume: 'Creative Marketing Manager experienced in copy writing, influencer partnerships, Instagram ads, brand awareness.',
+        min: 20,
+        max: 40,
+        target: 28
+      }
+    ];
+
+    for (const ac of autoCands) {
+      cleanupCandidateIds.push(ac.id);
+      await fetch(`${BASE_URL}/api/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: ac.id,
+          name: ac.name,
+          email: ac.email,
+          job_id: testJobId,
+          job_title: 'Sales Operations Coordinator VERIFY',
+          resume_text: ac.resume,
+          user_id: R1_TENANT
+        })
+      });
+    }
+
+    // Wait and verify that server-side screening populated scores in Supabase within 30s
+    let allScreened = false;
+    let scores = {};
+    const pollStart = Date.now();
+    while (Date.now() - pollStart < 30000) {
+      const getCandsRes = await fetch(`${BASE_URL}/api/candidates`, {
+        headers: { 'Authorization': `Bearer ${r1Token}` }
+      });
+      if (getCandsRes.ok) {
+        const cJson = await getCandsRes.json();
+        const list = cJson.candidates || [];
+        let doneCount = 0;
+        for (const ac of autoCands) {
+          const found = list.find(c => c.id === ac.id);
+          if (found && found.screening_score !== null && found.screening_score !== undefined) {
+            scores[ac.id] = found.screening_score;
+            doneCount++;
+          }
+        }
+        if (doneCount === autoCands.length) {
+          allScreened = true;
+          break;
+        }
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    const elapsed = Math.round((Date.now() - pollStart) / 1000);
+    const reactScore = scores[autoCands[0].id];
+    const opsScore = scores[autoCands[1].id];
+    const mktScore = scores[autoCands[2].id];
+
+    const scoresValid = allScreened &&
+      reactScore >= autoCands[0].min && reactScore <= autoCands[0].max &&
+      opsScore >= autoCands[1].min && opsScore <= autoCands[1].max &&
+      mktScore >= autoCands[2].min && mktScore <= autoCands[2].max;
+
+    report(scoresValid,
+      `Fix 2: 3 applicants evaluated server-side within ${elapsed}s without client PATCH (React: ${reactScore}%, Ops: ${opsScore}%, Mkt: ${mktScore}%)`);
+  } catch (err) {
+    report(false, 'Automated server screening check failed', err.message);
   }
 
   // CHECK 7: Calendar & Google Meet

@@ -15,93 +15,67 @@ async function extractTextFromPdf(buf: Uint8Array): Promise<string> {
   return "";
 }
 
-export default async function handler(req: any, res: any) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Content-Type", "application/json");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method Not Allowed" });
-  }
-
-  const authUser = await verifyAuth(req);
-  if (!authUser || !authUser.userId) {
-    return res.status(401).json({ success: false, error: "Unauthorized: Missing or invalid authentication token" });
-  }
-
+export async function evaluateCandidate(data: any) {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://fobfgvmwfzoxzzcheusm.supabase.co";
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvYmZndm13ZnpveHp6Y2hldXNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyMTMxNjAsImV4cCI6MjEwODc4OTE2MH0.EixGdozHbc0EFI6I7YCc15IyG-5ocTUUtGMKjXimPIQ";
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
   const sb = createClient(supabaseUrl, supabaseKey);
 
   try {
-    let body = req.body;
-    if (typeof body === "string") {
-      try { body = JSON.parse(body); } catch {}
-    } else if (body && typeof body === "object" && Buffer.isBuffer(body)) {
-      try { body = JSON.parse(body.toString("utf8")); } catch {}
-    }
-    const data = body || {};
-
     let { candidateId, candidateName, candidateEmail, jobId, jobTitle, jobDescription, resumeUrl, resumeText } = data;
 
-    // Always load job details server-side from jobs row by job_id or candidateId (FIX 3)
-    if (jobId || candidateId) {
-      try {
-        let jId = jobId;
-        if (!jId && candidateId) {
-          const { data: cand } = await sb.from("candidates").select("job_id").eq("id", candidateId).maybeSingle();
-          if (cand?.job_id) jId = cand.job_id;
+  // Always load job details server-side from jobs row by job_id or candidateId (FIX 3)
+  if (jobId || candidateId) {
+    try {
+      let jId = jobId;
+      if (!jId && candidateId) {
+        const { data: cand } = await sb.from("candidates").select("job_id").eq("id", candidateId).maybeSingle();
+        if (cand?.job_id) jId = cand.job_id;
+      }
+      if (jId) {
+        const { data: jobRow } = await sb.from("jobs").select("title, description, requirements").eq("id", jId).maybeSingle();
+        if (jobRow?.title) {
+          jobTitle = jobRow.title;
         }
-        if (jId) {
-          const { data: jobRow } = await sb.from("jobs").select("title, description, requirements").eq("id", jId).maybeSingle();
-          if (jobRow?.title) {
-            jobTitle = jobRow.title;
+        if (jobRow) {
+          const combined = `${jobRow.description || ''} ${jobRow.requirements || ''}`.trim();
+          if (combined) {
+            jobDescription = combined;
           }
-          if (jobRow) {
-            const combined = `${jobRow.description || ''} ${jobRow.requirements || ''}`.trim();
-            if (combined) {
-              jobDescription = combined;
-            }
-          }
         }
-      } catch {}
-    }
+      }
+    } catch {}
+  }
 
-    // Safety fallback: if database lookup failed, use jobTitle from request, NEVER "Target Role", "Evaluated Role" or "Position"
-    const reqJobTitle = data.job_title || data.jobTitle;
-    if (!jobTitle || jobTitle.toLowerCase() === "target role" || jobTitle.toLowerCase() === "evaluated role" || jobTitle.toLowerCase() === "position" || jobTitle.toLowerCase() === "role" || jobTitle.toLowerCase() === "data analyst") {
-      jobTitle = (reqJobTitle && reqJobTitle.toLowerCase() !== "target role" && reqJobTitle.toLowerCase() !== "evaluated role" && reqJobTitle.toLowerCase() !== "position" && reqJobTitle.toLowerCase() !== "role" && reqJobTitle.toLowerCase() !== "data analyst")
-        ? reqJobTitle
-        : "the role";
-    }
+  // Safety fallback: if database lookup failed, use jobTitle from request, NEVER "Target Role", "Evaluated Role" or "Position"
+  const reqJobTitle = data.job_title || data.jobTitle;
+  if (!jobTitle || jobTitle.toLowerCase() === "target role" || jobTitle.toLowerCase() === "evaluated role" || jobTitle.toLowerCase() === "position" || jobTitle.toLowerCase() === "role" || jobTitle.toLowerCase() === "data analyst") {
+    jobTitle = (reqJobTitle && reqJobTitle.toLowerCase() !== "target role" && reqJobTitle.toLowerCase() !== "evaluated role" && reqJobTitle.toLowerCase() !== "position" && reqJobTitle.toLowerCase() !== "role" && reqJobTitle.toLowerCase() !== "data analyst")
+      ? reqJobTitle
+      : "the role";
+  }
 
-    // 1. Return already saved score if candidate was previously screened (reproducible, idempotent)
-    if (candidateId) {
-      try {
-        const { data: existingCand } = await sb
-          .from("candidates")
-          .select("screening_score, screening_summary")
-          .eq("id", candidateId)
-          .single();
+  // 1. Return already saved score if candidate was previously screened (reproducible, idempotent)
+  if (candidateId) {
+    try {
+      const { data: existingCand } = await sb
+        .from("candidates")
+        .select("screening_score, screening_summary")
+        .eq("id", candidateId)
+        .single();
 
-        if (existingCand && existingCand.screening_score !== null && existingCand.screening_score !== undefined && existingCand.screening_summary) {
-          return res.status(200).json({
-            success: true,
-            provider: "persisted-record",
-            screening: {
-              score: existingCand.screening_score,
-              summary: existingCand.screening_summary,
-            },
-            screened_at: new Date().toISOString()
-          });
-        }
-      } catch {}
-    }
+      if (existingCand && existingCand.screening_score !== null && existingCand.screening_score !== undefined && existingCand.screening_summary) {
+        return {
+          success: true,
+          provider: "persisted-record",
+          screening: {
+            score: existingCand.screening_score,
+            summary: existingCand.screening_summary,
+          },
+          screened_at: new Date().toISOString()
+        };
+      }
+    } catch {}
+  }
 
     // 2. Check if resumeText is missing or contains raw PDF stream markers
     const isGarbageText = !resumeText || 
@@ -161,12 +135,12 @@ export default async function handler(req: any, res: any) {
         } catch {}
       }
 
-      return res.status(200).json({
+      return {
         success: true,
         provider: "unreadable-document-guard",
         screening: unreadableResult,
         screened_at: new Date().toISOString()
-      });
+      };
     }
 
     const openRouterKey = process.env.OPENROUTER_API_KEY || "";
@@ -598,12 +572,48 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    return res.status(200).json({
+    return {
       success: true,
       provider: usedProvider,
       screening: screeningResult,
       screened_at: new Date().toISOString()
-    });
+    };
+  } catch (err: any) {
+    console.error("Screening evaluation error:", err);
+    throw err;
+  }
+}
+
+export default async function handler(req: any, res: any) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Content-Type", "application/json");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false, error: "Method Not Allowed" });
+  }
+
+  const authUser = await verifyAuth(req);
+  if (!authUser || !authUser.userId) {
+    return res.status(401).json({ success: false, error: "Unauthorized: Missing or invalid authentication token" });
+  }
+
+  try {
+    let body = req.body;
+    if (typeof body === "string") {
+      try { body = JSON.parse(body); } catch {}
+    } else if (body && typeof body === "object" && Buffer.isBuffer(body)) {
+      try { body = JSON.parse(body.toString("utf8")); } catch {}
+    }
+    const data = body || {};
+
+    const result = await evaluateCandidate(data);
+    return res.status(200).json(result);
   } catch (err: any) {
     console.error("Screening endpoint error:", err);
     return res.status(500).json({ success: false, error: err.message || "Screening failed" });

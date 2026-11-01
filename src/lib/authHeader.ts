@@ -25,3 +25,21 @@ export function getAuthHeaders(userId?: string): Record<string, string> {
     'Authorization': `Bearer ${token}`
   };
 }
+
+// Centralized fetch wrapper guaranteeing Authorization header on all client calls
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const options: RequestInit = { ...init };
+  const headers = new Headers(options.headers || {});
+
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const token = getAuthToken();
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  options.headers = headers;
+  return fetch(input, options);
+}
