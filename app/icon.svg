@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="faviconEmeraldGrad" x1="14" y1="16" x2="38" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399" />
+      <stop offset="0.6" stop-color="#059669" />
+      <stop offset="1" stop-color="#046307" />
+    </linearGradient>
+    <linearGradient id="faviconOverlapCenter" x1="24" y1="20" x2="40" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#046307" />
+      <stop offset="1" stop-color="#022C22" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base Squircle Canvas: Solid matte Obsidian Black with 1px inner emerald rim -->
+  <rect x="0.5" y="0.5" width="63" height="63" rx="16" fill="#0A0A0A" stroke="#10B981" stroke-opacity="0.3" stroke-width="1" />
+
+  <!-- Center Geometric Emerald Mark -->
+  <g transform="translate(10, 10)">
+    <!-- Right Interlocking Diamond (Darker Emerald Fold for Depth) -->
+    <rect
+      x="25"
+      y="5"
+      width="22"
+      height="22"
+      rx="6"
+      transform="rotate(45 25 5)"
+      fill="#046307"
+    />
+
+    <!-- Left Interlocking Diamond (Luxury Emerald Gradient) -->
+    <rect
+      x="19"
+      y="5"
+      width="22"
+      height="22"
+      rx="6"
+      transform="rotate(45 19 5)"
+      fill="url(#faviconEmeraldGrad)"
+    />
+
+    <!-- Overlap Lens in Center -->
+    <path
+      d="M22 8.5L32.2 18.7C34.0 20.5 34.0 23.5 32.2 25.3L22 35.5L11.8 25.3C10.0 23.5 10.0 20.5 11.8 18.7L22 8.5Z"
+      fill="url(#faviconOverlapCenter)"
+    />
+
+    <!-- Sharp 4-Point Negative-Space AI Spark (Obsidian Black) -->
+    <path
+      d="M22 12.5C22 18.2 18.2 22 12.5 22C18.2 22 22 25.8 22 31.5C22 25.8 25.8 22 31.5 22C25.8 22 22 18.2 22 12.5Z"
+      fill="#0A0A0A"
+    />
+  </g>
+</svg>
+

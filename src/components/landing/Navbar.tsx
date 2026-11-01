@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, ArrowUpRight, ArrowRight, Sparkles } from "lucide-react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { HireForceLogo } from "@/components/HireForceLogo";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -46,8 +47,8 @@ export default function Navbar() {
       {/* 2. Main Luxury Navbar */}
       <nav className="bg-[#FAFAFA]/90 backdrop-blur-xl border-b border-black/[0.06] transition-all">
         <div className="max-w-7xl mx-auto px-6 lg:px-12 h-20 flex items-center justify-between">
-          {/* Left: Neural Talent Prism Brand Mark & Wordmark */}
-          <BrandLogo size="md" theme="light" />
+          {/* Left: Geometric SaaS Emblem & Wordmark */}
+          <HireForceLogo theme="light" />
 
           {/* Center: Navigation links in #0A0A0A/70 with smooth hover transitions to #046307 */}
           <div className="hidden md:flex items-center gap-10">

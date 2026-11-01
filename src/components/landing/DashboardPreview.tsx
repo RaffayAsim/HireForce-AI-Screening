@@ -17,6 +17,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { HireForceLogo } from "@/components/HireForceLogo";
 
 export default function DashboardPreview() {
   const [selectedCandidate, setSelectedCandidate] = useState<string>("alex");
@@ -143,14 +144,8 @@ export default function DashboardPreview() {
             <div className="flex">
               {/* Sidebar (Desktop) */}
               <div className="hidden md:flex flex-col w-56 bg-neutral-50/90 border-r border-neutral-200 p-4 text-xs space-y-1 shrink-0">
-                <div className="flex items-center gap-2.5 mb-6">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                    <Sparkles size={14} />
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-sm font-extrabold text-[#0A0A0A] tracking-tight">HireForce</span>
-                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1 rounded">AI</span>
-                  </div>
+                <div className="mb-6">
+                  <HireForceLogo size="sm" to="" />
                 </div>
 
                 {[

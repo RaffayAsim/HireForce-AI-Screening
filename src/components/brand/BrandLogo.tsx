@@ -21,19 +21,62 @@ export const BrandMark: React.FC<{ size?: number; className?: string }> = ({
     <div
       style={{ width: size, height: size }}
       className={cn(
-        "relative rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.45)]",
+        "relative flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:rotate-[4deg]",
         className
       )}
     >
-      {/* Exact Neural Talent Prism Insignia */}
-      <img
-        src="/hireforce-logo-prism.png"
-        alt="HireForce AI Neural Talent Prism"
-        className="w-full h-full object-contain rounded-xl drop-shadow-[0_2px_10px_rgba(16,185,129,0.3)]"
-      />
+      <svg
+        viewBox="0 0 44 44"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="w-full h-full"
+      >
+        <defs>
+          <linearGradient id="hfEmeraldLeftBrand" x1="4" y1="6" x2="28" y2="38" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#34D399" />
+            <stop offset="0.5" stopColor="#10B981" />
+            <stop offset="1" stopColor="#046307" />
+          </linearGradient>
+          <linearGradient id="hfOverlapCenterBrand" x1="14" y1="10" x2="30" y2="34" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#065F46" />
+            <stop offset="1" stopColor="#022C22" />
+          </linearGradient>
+        </defs>
 
-      {/* Live Active Pulse Beacon (Top Right) */}
-      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#10B981] ring-2 ring-[#0A0A0A] animate-pulse" />
+        {/* Right Interlocking Diamond (Obsidian Black) */}
+        <rect
+          x="25"
+          y="5"
+          width="22"
+          height="22"
+          rx="6"
+          transform="rotate(45 25 5)"
+          fill="#0A0A0A"
+        />
+
+        {/* Left Interlocking Diamond (Luxury Emerald) */}
+        <rect
+          x="19"
+          y="5"
+          width="22"
+          height="22"
+          rx="6"
+          transform="rotate(45 19 5)"
+          fill="url(#hfEmeraldLeftBrand)"
+        />
+
+        {/* Deep Forest Overlap Lens in Center */}
+        <path
+          d="M22 8.5L32.2 18.7C34.0 20.5 34.0 23.5 32.2 25.3L22 35.5L11.8 25.3C10.0 23.5 10.0 20.5 11.8 18.7L22 8.5Z"
+          fill="url(#hfOverlapCenterBrand)"
+        />
+
+        {/* Crisp Negative-Space 4-Point AI Spark */}
+        <path
+          d="M22 12.5C22 18.2 18.2 22 12.5 22C18.2 22 22 25.8 22 31.5C22 25.8 25.8 22 31.5 22C25.8 22 22 18.2 22 12.5Z"
+          fill="#FAFAFA"
+        />
+      </svg>
     </div>
   );
 };
@@ -83,14 +126,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           <div className="flex items-baseline gap-1.5">
             <span
               className={cn(
-                "font-extrabold tracking-tight font-sans transition-colors",
+                "font-extrabold tracking-[-0.03em] font-sans transition-colors",
                 textSizes[size],
                 theme === "dark"
-                  ? "text-white group-hover:text-emerald-300"
+                  ? "text-[#FAFAFA] group-hover:text-emerald-300"
                   : "text-[#0A0A0A] group-hover:text-[#046307]"
               )}
             >
-              HireForce
+              Hire Force
             </span>
 
             {showBadge && (

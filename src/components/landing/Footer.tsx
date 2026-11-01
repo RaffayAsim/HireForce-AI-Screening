@@ -2,6 +2,7 @@ import React from "react";
 import { Sparkles, ArrowUp, ArrowRight, Zap, ShieldCheck, Mail, Video, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { HireForceLogo } from "@/components/HireForceLogo";
 
 export default function Footer() {
   const scrollToTop = () => {
@@ -53,7 +54,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 mb-16">
           {/* Brand Info (4 Columns on lg) */}
           <div className="lg:col-span-4 space-y-4">
-            <BrandLogo size="md" theme="dark" />
+            <HireForceLogo theme="dark" />
 
             <p className="text-xs text-neutral-400 leading-relaxed max-w-sm">
               The autonomous candidate screening and communication engine for in-house HR leaders and independent staffing recruiters. Evaluate 50 CVs in seconds and schedule interviews automatically.

@@ -22,6 +22,7 @@ import { formatSalary } from '@/lib/utils';
 import { showSuccess, showError } from '@/utils/toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { TrialLimitModal } from '@/components/trial/TrialLimitModal';
+import { HireForceLogo } from '@/components/HireForceLogo';
 
 const Apply = () => {
   const { jobId } = useParams();
@@ -181,12 +182,7 @@ const Apply = () => {
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Brand Header */}
         <div className="flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded bg-[#18181B] text-emerald-400 flex items-center justify-center">
-              <Sparkles size={14} />
-            </div>
-            <span className="text-sm font-bold text-zinc-900">HireForce AI</span>
-          </Link>
+          <HireForceLogo size="sm" to="/" />
           <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
             Actively Hiring
           </span>
