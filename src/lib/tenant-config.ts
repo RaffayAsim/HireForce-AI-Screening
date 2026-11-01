@@ -9,7 +9,6 @@ let globalTenantConfig: {
 
 export const setGlobalTenantConfig = (config: typeof globalTenantConfig) => {
   globalTenantConfig = config;
-  console.log('🌍 Global tenant config set:', config);
 };
 
 export const getTenantConfig = (): typeof globalTenantConfig => {

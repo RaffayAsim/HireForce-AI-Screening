@@ -1,5 +1,6 @@
 import { getNangoKey } from "../_lib/nango.js";
 import { verifyAuth } from "../_lib/auth.js";
+import { getIntegration } from "../_lib/integrations.js";
 
 function decodeHtml(str: string) {
   if (!str) return "";
@@ -45,39 +46,15 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ success: true, messages: [] });
     }
 
-    const nangoResp = await fetch("https://api.nango.dev/connections", {
-      headers: { "Authorization": `Bearer ${key}` }
-    });
-    const data = await nangoResp.json();
-    const allConnections = data.connections || data.data || [];
-    let mailConn = allConnections.find((c: any) =>
-      (c.provider_config_key === "google-mail" || c.provider === "google-mail") &&
-      (c.end_user?.id === effectiveUserId || c.tags?.end_user_id === effectiveUserId || c.connection_id === effectiveUserId)
-    );
-
-    if (!mailConn && effectiveUserId && effectiveUserId !== "null" && effectiveUserId !== "undefined") {
-      const userCalConn = allConnections.find((c: any) =>
-        (c.provider_config_key === "google-calendar" || c.provider === "google-calendar") &&
-        (c.end_user?.id === effectiveUserId || c.tags?.end_user_id === effectiveUserId || c.connection_id === effectiveUserId)
-      );
-
-      if (userCalConn) {
-        mailConn = allConnections.find((c: any) =>
-          (c.provider_config_key === "google-mail" || c.provider === "google-mail") &&
-          (c.connection_id === "b7ea940c-efcc-47c0-9247-31ece8ca7eb0" || 
-           c.end_user?.organization?.id === userCalConn.end_user?.organization?.id)
-        );
-      }
-    }
-
-    if (!mailConn) {
+    const mailInt = await getIntegration(authUser.tenantId, "google", "mail");
+    if (!mailInt) {
       return res.status(200).json({ success: true, messages: [] });
     }
 
     const qFilter = folder === "sent" ? "in:sent" : "newer_than:14d";
     const queryParam = `q=${encodeURIComponent(qFilter)}&maxResults=30`;
 
-    const detailResp = await fetch(`https://api.nango.dev/connection/${mailConn.connection_id}?provider_config_key=google-mail`, {
+    const detailResp = await fetch(`https://api.nango.dev/connection/${mailInt.connection_id}?provider_config_key=google-mail`, {
       headers: { "Authorization": `Bearer ${key}` }
     });
     const detailData = await detailResp.json();

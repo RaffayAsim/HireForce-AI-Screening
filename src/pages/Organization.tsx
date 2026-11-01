@@ -41,17 +41,35 @@ import {
   ConnectedRecruiterAccount 
 } from '@/lib/connectedAccountService';
 import { clearAllProfileData } from '@/lib/api';
+import { apiFetch } from '@/lib/authHeader';
 import { ConnectWorkAccountModal } from '@/components/account/ConnectWorkAccountModal';
 
 const Organization = () => {
   const { user } = useAuth();
   const [saved, setSaved] = useState(false);
   const [connectedAcc, setConnectedAcc] = useState<ConnectedRecruiterAccount | null>(() => getConnectedAccount(user?.id));
+  const [serverIntegrations, setServerIntegrations] = useState<any[]>([]);
   
   // Modal states for Email, Calendar & Video Meetings
   const [modalCategory, setModalCategory] = useState<'email' | 'calendar' | 'meeting' | 'all'>('email');
   const [modalProviderId, setModalProviderId] = useState<string | undefined>(undefined);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const loadIntegrations = async () => {
+    try {
+      const res = await apiFetch('/api/integrations');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.integrations)) {
+          setServerIntegrations(data.integrations);
+        }
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadIntegrations();
+  }, [user?.id]);
 
   useEffect(() => {
     const acc = getConnectedAccount(user?.id);
@@ -65,6 +83,7 @@ const Organization = () => {
 
   useEffect(() => {
     const handleUpdate = () => {
+      loadIntegrations();
       const acc = getConnectedAccount(user?.id);
       if (user?.userType === 'trial' && acc?.email?.toLowerCase().includes('angellagarland')) {
         disconnectAccount(user?.id);
@@ -140,31 +159,54 @@ const Organization = () => {
     }
   };
 
-  const handleDisconnectEmail = () => {
+  const handleDisconnectEmail = async () => {
     if (window.confirm('Disconnect your email mailbox? Candidate email thread syncing will be paused.')) {
+      try {
+        await apiFetch('/api/integrations?service=mail', { method: 'DELETE' });
+      } catch {}
       disconnectEmailAccount(user?.id);
+      await loadIntegrations();
       showSuccess('Email mailbox disconnected.');
     }
   };
 
-  const handleDisconnectCalendar = () => {
+  const handleDisconnectCalendar = async () => {
     if (window.confirm('Disconnect your calendar integration? Video room generation and availability sync will be paused.')) {
+      try {
+        await apiFetch('/api/integrations?service=calendar', { method: 'DELETE' });
+      } catch {}
       disconnectCalendarAccount(user?.id);
+      await loadIntegrations();
       showSuccess('Calendar integration disconnected.');
     }
   };
 
-  const handleDisconnectMeeting = () => {
+  const handleDisconnectMeeting = async () => {
     if (window.confirm('Disconnect your video meeting integration? Meeting room generation will be paused.')) {
+      try {
+        await apiFetch('/api/integrations?service=meeting', { method: 'DELETE' });
+      } catch {}
       disconnectVideoMeetingAccount(user?.id);
+      await loadIntegrations();
       setConnectedAcc(getConnectedAccount(user?.id));
       showSuccess('Video meeting integration disconnected.');
     }
   };
 
-  const emailActive = isEmailConnected(user?.id);
-  const calendarActive = isCalendarConnected(user?.id);
-  const videoActive = isVideoMeetingConnected(user?.id);
+  const emailActive = serverIntegrations.some(i => i.service === 'mail') || isEmailConnected(user?.id);
+  const calendarActive = serverIntegrations.some(i => i.service === 'calendar') || isCalendarConnected(user?.id);
+  const videoActive = serverIntegrations.some(i => i.service === 'meeting' || i.service === 'calendar') || isVideoMeetingConnected(user?.id);
+
+  const displayAccount = connectedAcc || (serverIntegrations.length > 0 ? {
+    id: 'server-int',
+    email: serverIntegrations[0].account_email,
+    recruiter_name: (serverIntegrations[0].account_email || 'Recruiter').split('@')[0],
+    provider: serverIntegrations[0].provider,
+    calendar_sync: {
+      calendar_name: `${serverIntegrations[0].provider === 'google' ? 'Google Calendar (Primary)' : 'Primary Calendar'}`,
+      default_format: serverIntegrations[0].provider === 'microsoft' ? 'teams' : 'google_meet',
+    }
+  } : null);
 
   return (
     <DashboardLayout>
@@ -223,20 +265,20 @@ const Organization = () => {
             </CardHeader>
 
             <CardContent className="p-5 space-y-4">
-              {emailActive && connectedAcc ? (
+              {emailActive && displayAccount ? (
                 <div className="space-y-3">
                   <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-200/80 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-zinc-500">Connected Address:</span>
-                      <span className="font-bold text-zinc-900">{connectedAcc.email}</span>
+                      <span className="font-bold text-zinc-900">{displayAccount.email}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-zinc-500">Provider:</span>
-                      <span className="font-medium text-zinc-800 capitalize">{connectedAcc.provider === 'google' ? 'Google Workspace / Gmail' : connectedAcc.provider === 'microsoft' ? 'Microsoft Outlook 365' : connectedAcc.provider}</span>
+                      <span className="font-medium text-zinc-800 capitalize">{displayAccount.provider === 'google' ? 'Google Workspace / Gmail' : displayAccount.provider === 'microsoft' ? 'Microsoft Outlook 365' : displayAccount.provider}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-zinc-500">Recruiter Profile:</span>
-                      <span className="text-zinc-700">{connectedAcc.recruiter_name}</span>
+                      <span className="text-zinc-700">{displayAccount.recruiter_name}</span>
                     </div>
                   </div>
 
@@ -333,17 +375,17 @@ const Organization = () => {
             </CardHeader>
 
             <CardContent className="p-5 space-y-4">
-              {calendarActive && connectedAcc ? (
+              {calendarActive && displayAccount ? (
                 <div className="space-y-3">
                   <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-200/80 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-zinc-500">Primary Calendar:</span>
-                      <span className="font-bold text-zinc-900">{connectedAcc.calendar_sync?.calendar_name || 'Primary Recruiter Calendar'}</span>
+                      <span className="font-bold text-zinc-900">{displayAccount.calendar_sync?.calendar_name || 'Primary Recruiter Calendar'}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-zinc-500">Default Room Format:</span>
                       <span className="font-medium text-emerald-700 capitalize font-mono text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                        {connectedAcc.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet HD'}
+                        {displayAccount.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet HD'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
@@ -421,7 +463,7 @@ const Organization = () => {
             <CardHeader className="p-5 pb-3 border-b border-zinc-100 flex flex-row items-start justify-between space-y-0">
               <div className="flex items-center gap-2.5">
                 <div className={`w-9 h-9 rounded-lg border flex items-center justify-center ${
-                  connectedAcc?.calendar_sync?.default_format === 'teams'
+                  displayAccount?.calendar_sync?.default_format === 'teams'
                     ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
                     : 'bg-emerald-50 border-emerald-200 text-emerald-600'
                 }`}>
@@ -440,14 +482,14 @@ const Organization = () => {
                 variant="outline" 
                 className={
                   videoActive
-                    ? (connectedAcc?.calendar_sync?.default_format === 'teams'
+                    ? (displayAccount?.calendar_sync?.default_format === 'teams'
                         ? "bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px]"
                         : "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]")
                     : "bg-zinc-100 text-zinc-500 border-zinc-200 text-[10px]"
                 }
               >
                 {videoActive
-                  ? (connectedAcc?.calendar_sync?.default_format === 'teams' ? "Teams Active" : "Meet Active")
+                  ? (displayAccount?.calendar_sync?.default_format === 'teams' ? "Teams Active" : "Meet Active")
                   : "Not Connected"}
               </Badge>
             </CardHeader>
@@ -460,7 +502,7 @@ const Organization = () => {
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-[11px] font-semibold text-zinc-500">Default Meeting Room Provider:</label>
                       <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                        {connectedAcc?.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet'}
+                        {displayAccount?.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet'}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">

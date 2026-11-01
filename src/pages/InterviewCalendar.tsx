@@ -1,5 +1,5 @@
 import { triggerAutomation, checkAndDispatchInterviewReminders } from '@/lib/automationService';
-import { getAuthHeaders } from '@/lib/authHeader';
+import { getAuthHeaders, apiFetch } from '@/lib/authHeader';
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -51,7 +51,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Zap, Download, CalendarPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type MeetingFormat = 'google_meet' | 'teams' | 'zoom' | 'phone' | 'in_person';
+type MeetingFormat = 'google_meet' | 'teams' | 'zoho_meeting' | 'zoom' | 'phone' | 'in_person';
 
 const InterviewCalendar = () => {
   const navigate = useNavigate();
@@ -66,6 +66,29 @@ const InterviewCalendar = () => {
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [connectedAcc, setConnectedAcc] = useState<ConnectedRecruiterAccount | null>(() => getConnectedAccount(user?.id));
   const [isWorkAccountModalOpen, setIsWorkAccountModalOpen] = useState(false);
+  const [serverIntegrations, setServerIntegrations] = useState<any[]>([]);
+
+  const loadServerIntegrations = async () => {
+    try {
+      const res = await apiFetch('/api/integrations');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.integrations)) {
+          setServerIntegrations(data.integrations);
+        }
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadServerIntegrations();
+    window.addEventListener('unified_account_updated', loadServerIntegrations);
+    return () => window.removeEventListener('unified_account_updated', loadServerIntegrations);
+  }, [user?.id]);
+
+  const hasGoogle = serverIntegrations.some(i => i.provider === 'google' && (i.service === 'meeting' || i.service === 'calendar')) || (connectedAcc?.status === 'active' && connectedAcc?.provider === 'google');
+  const hasMicrosoft = serverIntegrations.some(i => i.provider === 'microsoft' && (i.service === 'meeting' || i.service === 'calendar')) || (connectedAcc?.status === 'active' && connectedAcc?.provider === 'microsoft');
+  const hasZoho = serverIntegrations.some(i => i.provider === 'zoho' && i.service === 'meeting') || (connectedAcc?.status === 'active' && (connectedAcc?.provider as any) === 'zoho');
 
   useEffect(() => {
     setConnectedAcc(getConnectedAccount(user?.id));
@@ -77,13 +100,13 @@ const InterviewCalendar = () => {
       setConnectedAcc(acc);
       if (acc && acc.status === 'active') {
         setInterviewer(acc.recruiter_name);
-        if (acc.provider === 'microsoft') {
-          setMeetingFormat('teams');
-        } else if (acc.provider === 'google') {
-          setMeetingFormat('google_meet');
-        } else {
-          setMeetingFormat('phone');
-        }
+      }
+      if (hasGoogle) {
+        setMeetingFormat('google_meet');
+      } else if (hasMicrosoft) {
+        setMeetingFormat('teams');
+      } else if (hasZoho) {
+        setMeetingFormat('zoho_meeting');
       } else {
         setMeetingFormat('phone');
       }
@@ -93,17 +116,14 @@ const InterviewCalendar = () => {
     window.addEventListener('unified_account_updated', handleAccUpdate);
 
     return () => window.removeEventListener('unified_account_updated', handleAccUpdate);
-  }, [user?.id]);
+  }, [user?.id, hasGoogle, hasMicrosoft, hasZoho]);
   const [viewMode, setViewMode] = useState<'month' | 'agenda'>('month');
-  const calendarConnected = isCalendarConnected();
-
-  const hasGoogle = connectedAcc?.status === 'active' && connectedAcc?.provider === 'google';
-  const hasMicrosoft = connectedAcc?.status === 'active' && connectedAcc?.provider === 'microsoft';
+  const calendarConnected = isCalendarConnected() || serverIntegrations.some(i => i.service === 'calendar');
 
   // New Interview Form
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [roundType, setRoundType] = useState<Interview['round_type']>('Technical Round');
-  const [meetingFormat, setMeetingFormat] = useState<MeetingFormat>('google_meet');
+  const [meetingFormat, setMeetingFormat] = useState<MeetingFormat>('phone');
   const [interviewDate, setInterviewDate] = useState(() => new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   const [interviewTime, setInterviewTime] = useState('10:00');
   const [duration, setDuration] = useState('45');
@@ -694,6 +714,22 @@ const InterviewCalendar = () => {
                   </button>
                 )}
 
+                {hasZoho && (
+                  <button
+                    type="button"
+                    onClick={() => handleMeetingFormatChange('zoho_meeting')}
+                    className={cn(
+                      "p-2.5 rounded-lg border text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer",
+                      meetingFormat === 'zoho_meeting'
+                        ? "bg-amber-50 border-amber-500 text-amber-800 shadow-2xs ring-1 ring-amber-500/20"
+                        : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                    )}
+                  >
+                    <Video size={16} className={meetingFormat === 'zoho_meeting' ? 'text-amber-600' : 'text-zinc-500'} />
+                    <span>Zoho Meeting</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => handleMeetingFormatChange('phone')}
@@ -723,9 +759,9 @@ const InterviewCalendar = () => {
                 </button>
               </div>
 
-              {!hasGoogle && !hasMicrosoft && (
-                <p className="text-[11px] text-zinc-400 mt-1.5">
-                  Tip: Connect Google Calendar or Microsoft Teams in Settings to unlock 1-click video meeting rooms.
+              {!hasGoogle && !hasMicrosoft && !hasZoho && (
+                <p className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2">
+                  Connect Google, Microsoft Teams or Zoho in Settings to create a meeting link.
                 </p>
               )}
             </div>

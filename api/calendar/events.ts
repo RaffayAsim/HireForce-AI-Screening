@@ -1,5 +1,6 @@
 import { getNangoKey } from "../_lib/nango.js";
 import { verifyAuth } from "../_lib/auth.js";
+import { getIntegration } from "../_lib/integrations.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -11,40 +12,27 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  // Require auth token and derive userId server-side (FIX 1)
+  // Require auth token and derive tenantId server-side
   const authUser = await verifyAuth(req);
-  if (!authUser || !authUser.userId) {
+  if (!authUser || !authUser.tenantId) {
     return res.status(401).json({ success: false, error: "Unauthorized: Missing or invalid authentication token" });
   }
 
-  const requestedUserId = req.query?.userId || (new URL(req.url, "http://localhost").searchParams.get("userId"));
-  if (requestedUserId && requestedUserId !== "null" && requestedUserId !== "undefined" && requestedUserId.trim() !== "" && requestedUserId !== authUser.userId) {
-    return res.status(401).json({ success: false, error: "Unauthorized: Token does not match requested tenant" });
-  }
-
-  const effectiveUserId = authUser.userId;
+  const effectiveTenantId = authUser.tenantId;
 
   if (req.method === "GET") {
     try {
+      const calInt = await getIntegration(effectiveTenantId, "google", "calendar");
+      if (!calInt) {
+        return res.status(200).json({ success: true, events: [] });
+      }
+
       const key = getNangoKey();
       if (!key) {
         return res.status(200).json({ success: true, events: [] });
       }
 
-      const nangoResp = await fetch("https://api.nango.dev/connections", {
-        headers: { "Authorization": `Bearer ${key}` }
-      });
-      const data = await nangoResp.json();
-      const calConn = (data.connections || []).find((c: any) =>
-        (c.provider_config_key === "google-calendar" || c.provider === "google-calendar") &&
-        (c.end_user?.id === effectiveUserId || c.tags?.end_user_id === effectiveUserId || c.connection_id === effectiveUserId)
-      );
-
-      if (!calConn) {
-        return res.status(200).json({ success: true, events: [] });
-      }
-
-      const detailResp = await fetch(`https://api.nango.dev/connection/${calConn.connection_id}?provider_config_key=google-calendar`, {
+      const detailResp = await fetch(`https://api.nango.dev/connection/${calInt.connection_id}?provider_config_key=google-calendar`, {
         headers: { "Authorization": `Bearer ${key}` }
       });
       const detailData = await detailResp.json();
@@ -110,7 +98,7 @@ export default async function handler(req: any, res: any) {
           duration_minutes: 45,
           interviewer: "Talent Acquisition Team",
           status: "Scheduled",
-          user_id: effectiveUserId,
+          user_id: effectiveTenantId,
         });
       });
 
@@ -132,7 +120,6 @@ export default async function handler(req: any, res: any) {
         job_title = "Evaluated Position",
         round_type = "Technical Round",
         meeting_format = (data.description?.includes("Format: phone") || data.format === "phone" || data.meeting_format === "phone") ? "phone" : (data.format || data.meeting_format || "google_meet"),
-        meeting_link,
         phone_number = data.phone || data.schedulePhone || data.phone_number,
         location = data.location || data.scheduleLocation,
         date,
@@ -141,7 +128,6 @@ export default async function handler(req: any, res: any) {
         interviewer = "Talent Acquisition Team",
         notes = data.description || data.notes || "",
         status = "Scheduled",
-        userId = effectiveUserId,
       } = data;
 
       const createdEventObj: any = {
@@ -153,7 +139,7 @@ export default async function handler(req: any, res: any) {
         job_title,
         round_type,
         meeting_format,
-        meeting_link: meeting_format === "phone" ? (phone_number ? `tel:${phone_number}` : "") : meeting_link,
+        meeting_link: "",
         phone_number,
         location,
         date,
@@ -162,38 +148,26 @@ export default async function handler(req: any, res: any) {
         interviewer,
         notes,
         status,
-        user_id: userId,
+        user_id: effectiveTenantId,
       };
 
-      // Call Google Calendar API using Nango connection
-      const key = getNangoKey();
-      if (key) {
-        try {
-          const nangoResp = await fetch("https://api.nango.dev/connections", {
-            headers: { "Authorization": `Bearer ${key}` }
+      if (meeting_format === "google_meet") {
+        const calInt = await getIntegration(effectiveTenantId, "google", "meeting") || await getIntegration(effectiveTenantId, "google", "calendar");
+        if (!calInt) {
+          return res.status(400).json({
+            success: false,
+            error: "Google Calendar is not connected or failed to generate a Google Meet link. Please connect Google Calendar in Settings."
           });
-          const nangoData = await nangoResp.json();
-          let calConnections = nangoData.connections || [];
-          if (userId && userId !== "null" && userId !== "undefined") {
-            calConnections = calConnections.filter((c: any) =>
-              c.end_user?.id === userId ||
-              c.tags?.end_user_id === userId ||
-              c.connection_id === userId
-            );
-          } else {
-            calConnections = [];
-          }
-          const calConn = calConnections.find((c: any) =>
-            c.provider_config_key === "google-calendar" || c.provider === "google-calendar"
-          );
+        }
 
-          if (calConn) {
-            const detailResp = await fetch(`https://api.nango.dev/connection/${calConn.connection_id}?provider_config_key=google-calendar`, {
+        const key = getNangoKey();
+        if (key) {
+          try {
+            const detailResp = await fetch(`https://api.nango.dev/connection/${calInt.connection_id}?provider_config_key=google-calendar`, {
               headers: { "Authorization": `Bearer ${key}` }
             });
             const detailData = await detailResp.json();
             const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
-
             if (accessToken) {
               let gCalTimeZone = "UTC";
               try {
@@ -211,18 +185,8 @@ export default async function handler(req: any, res: any) {
               const endM = totalM % 60;
               const endTimeStr = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
-              const summaryTitle = meeting_format === "phone"
-                ? `Phone Interview: ${candidate_name} (${job_title})`
-                : meeting_format === "in_person"
-                  ? `Physical Interview: ${candidate_name} (${job_title})`
-                  : `Interview: ${candidate_name} (${job_title})`;
-
-              const formatDisplayName = 
-                meeting_format === "google_meet" ? "Google Meet (Video Call)" :
-                meeting_format === "teams" ? "Microsoft Teams" :
-                meeting_format === "phone" ? "Phone Call" :
-                meeting_format === "in_person" || meeting_format === "physical" ? "In-Person (Office)" :
-                meeting_format;
+              const summaryTitle = `Interview: ${candidate_name} (${job_title})`;
+              const formatDisplayName = "Google Meet (Video Call)";
 
               const gCalPayload: any = {
                 summary: summaryTitle,
@@ -236,9 +200,7 @@ export default async function handler(req: any, res: any) {
                   notes ? `Notes: ${notes}` : "",
                   `-- Scheduled via HireForce AI Screening --`
                 ].filter(Boolean).join("\n"),
-                location: meeting_format === "phone"
-                  ? (phone_number ? `Phone: ${phone_number}` : "Phone Call")
-                  : (location || ""),
+                location: location || "",
                 start: { dateTime: `${date}T${time}:00`, timeZone: gCalTimeZone },
                 end: { dateTime: `${date}T${endTimeStr}:00`, timeZone: gCalTimeZone },
                 reminders: { useDefault: true },
@@ -250,14 +212,12 @@ export default async function handler(req: any, res: any) {
                 ];
               }
 
-              if (meeting_format === "google_meet") {
-                gCalPayload.conferenceData = {
-                  createRequest: {
-                    requestId: `req-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                    conferenceSolutionKey: { type: "hangoutsMeet" }
-                  }
-                };
-              }
+              gCalPayload.conferenceData = {
+                createRequest: {
+                  requestId: `req-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  conferenceSolutionKey: { type: "hangoutsMeet" }
+                }
+              };
 
               const gResp = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all", {
                 method: "POST",
@@ -272,24 +232,139 @@ export default async function handler(req: any, res: any) {
                 const gData = await gResp.json();
                 createdEventObj.id = createdEventObj.id || gData.id;
                 createdEventObj.google_event_id = gData.id;
-                if (gData.hangoutLink && meeting_format === "google_meet") {
+                if (gData.hangoutLink) {
                   createdEventObj.meeting_link = gData.hangoutLink;
                 }
-              } else {
-                const errBody = await gResp.text();
-                console.warn("Google Calendar insert error:", errBody);
               }
             }
+          } catch (gErr) {
+            console.warn("Sync to Google Calendar failed:", gErr);
           }
-        } catch (gErr) {
-          console.warn("Sync to Google Calendar failed:", gErr);
         }
-      }
 
-      if (meeting_format === "google_meet" && (!createdEventObj.meeting_link || !createdEventObj.meeting_link.includes("meet.google.com"))) {
+        if (!createdEventObj.meeting_link || !createdEventObj.meeting_link.includes("meet.google.com")) {
+          return res.status(400).json({
+            success: false,
+            error: "Google Calendar is not connected or failed to generate a Google Meet link. Please connect Google Calendar in Settings."
+          });
+        }
+      } else if (meeting_format === "teams") {
+        const msInt = await getIntegration(effectiveTenantId, "microsoft", "meeting") || await getIntegration(effectiveTenantId, "microsoft", "calendar");
+        if (!msInt) {
+          return res.status(400).json({
+            success: false,
+            error: "Microsoft Teams is not connected. Please connect Microsoft Teams in Settings to create a meeting link."
+          });
+        }
+
+        const key = getNangoKey();
+        if (key) {
+          try {
+            const detailResp = await fetch(`https://api.nango.dev/connection/${msInt.connection_id}?provider_config_key=microsoft-teams`, {
+              headers: { "Authorization": `Bearer ${key}` }
+            });
+            const detailData = await detailResp.json();
+            const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
+            if (accessToken) {
+              const [h, m] = (time || "10:00").split(":").map(Number);
+              const dur = duration_minutes || 45;
+              const totalM = (h || 10) * 60 + (m || 0) + dur;
+              const endH = Math.floor(totalM / 60) % 24;
+              const endM = totalM % 60;
+              const endTimeStr = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+              const msResp = await fetch("https://graph.microsoft.com/v1.0/me/onlineMeetings", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${accessToken}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  startDateTime: `${date}T${time}:00Z`,
+                  endDateTime: `${date}T${endTimeStr}:00Z`,
+                  subject: `Interview: ${candidate_name} (${job_title})`
+                })
+              });
+
+              if (msResp.ok) {
+                const msData = await msResp.json();
+                const teamsLink = msData.joinWebUrl || msData.joinUrl;
+                if (teamsLink && teamsLink.includes("teams.microsoft.com")) {
+                  createdEventObj.meeting_link = teamsLink;
+                  createdEventObj.ms_event_id = msData.id;
+                }
+              }
+            }
+          } catch (msErr) {
+            console.warn("Sync to Microsoft Teams failed:", msErr);
+          }
+        }
+
+        if (!createdEventObj.meeting_link || !createdEventObj.meeting_link.includes("teams.microsoft.com")) {
+          return res.status(400).json({
+            success: false,
+            error: "Microsoft Teams is not connected or failed to generate a meeting link. Please connect Microsoft Teams in Settings."
+          });
+        }
+      } else if (meeting_format === "zoho" || meeting_format === "zoho_meeting") {
+        const zohoInt = await getIntegration(effectiveTenantId, "zoho", "meeting");
+        if (!zohoInt) {
+          return res.status(400).json({
+            success: false,
+            error: "Zoho Meeting is not connected. Please connect Zoho in Settings to create a meeting link."
+          });
+        }
+
+        const key = getNangoKey();
+        if (key) {
+          try {
+            const detailResp = await fetch(`https://api.nango.dev/connection/${zohoInt.connection_id}?provider_config_key=zoho-meeting`, {
+              headers: { "Authorization": `Bearer ${key}` }
+            });
+            const detailData = await detailResp.json();
+            const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
+            if (accessToken) {
+              const zohoResp = await fetch("https://meeting.zoho.com/api/v2/sessions.json", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${accessToken}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  session: {
+                    topic: `Interview: ${candidate_name} (${job_title})`,
+                    presenter: candidate_email || "recruiter",
+                    duration: duration_minutes || 45
+                  }
+                })
+              });
+              if (zohoResp.ok) {
+                const zData = await zohoResp.json();
+                const link = zData?.session?.join_url || zData?.join_url;
+                if (link && (link.includes("meeting.zoho.com") || link.includes("meet.zoho.com"))) {
+                  createdEventObj.meeting_link = link;
+                }
+              }
+            }
+          } catch (zErr) {
+            console.warn("Sync to Zoho Meeting failed:", zErr);
+          }
+        }
+
+        if (!createdEventObj.meeting_link || (!createdEventObj.meeting_link.includes("meeting.zoho.com") && !createdEventObj.meeting_link.includes("meet.zoho.com"))) {
+          return res.status(400).json({
+            success: false,
+            error: "Zoho Meeting is not connected or failed to generate a meeting link. Please connect Zoho in Settings."
+          });
+        }
+      } else if (meeting_format === "phone") {
+        createdEventObj.meeting_link = phone_number ? `tel:${phone_number}` : "";
+      } else if (meeting_format === "in_person" || meeting_format === "physical") {
+        createdEventObj.meeting_link = "";
+      } else {
         return res.status(400).json({
           success: false,
-          error: "Google Calendar is not connected or failed to generate a Google Meet link. Please connect Google Calendar in Settings."
+          error: "Invalid or unsupported meeting format requested."
         });
       }
 

@@ -243,7 +243,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
       const cleanEmail = username.trim().toLowerCase();
-      console.log('🔐 Server login attempt for:', cleanEmail);
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

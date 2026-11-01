@@ -737,6 +737,155 @@ async function run() {
     report(false, 'Email check failed', err.message);
   }
 
+  // CHECK 8.5: Server-side integrations for ALL providers & Isolation
+  console.log('\n--- CHECK 8.5: Server-side integrations for ALL providers & Isolation ---');
+  try {
+    // 8.5.1: R1 shows Google connected via server endpoint with zero localStorage
+    const r1IntsRes = await fetch(`${BASE_URL}/api/integrations`, {
+      headers: { 'Authorization': `Bearer ${r1Token}` }
+    });
+    const r1IntsData = await r1IntsRes.json();
+    const r1Ints = r1IntsData.integrations || [];
+    const hasGoogleCal = r1Ints.some(i => i.provider === 'google' && i.service === 'calendar' && i.account_email?.includes('@'));
+    report(hasGoogleCal, 'Integrations: R1 shows Google connected via server endpoint with zero localStorage', `email: ${r1Ints[0]?.account_email || 'none'}`);
+
+    // 8.5.2: Cross-tenant isolation: R2 cannot list R1 events, create meetings, or send mail with R1 connection id
+    const r2CalRes = await fetch(`${BASE_URL}/api/calendar/events?userId=${R1_TENANT}`, {
+      headers: { 'Authorization': `Bearer ${r2Token}` }
+    });
+    const r2CalData = await r2CalRes.json();
+    const r2Events = r2CalData.events || [];
+    const noEventsLeaked = r2Events.length === 0;
+
+    // R2 attempting to create Google Meet with R1 connection id
+    const r2CreateRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${r2Token}`
+      },
+      body: JSON.stringify({
+        userId: R1_TENANT,
+        connection_id: '132806be-8d06-4b3f-a45a-75e4009e9714',
+        meeting_format: 'google_meet',
+        date: '2026-11-06',
+        time: '12:00'
+      })
+    });
+    const r2CreateBlocked = r2CreateRes.status === 400 || r2CreateRes.status === 401 || r2CreateRes.status === 403;
+
+    // R2 attempting to send mail with R1 connection id
+    const r2MailRes = await fetch(`${BASE_URL}/api/emails/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${r2Token}`
+      },
+      body: JSON.stringify({
+        userId: R1_TENANT,
+        connection_id: 'b7ea940c-efcc-47c0-9247-31ece8ca7eb0',
+        to: 'candidate@example.com',
+        subject: 'Unauthorized test',
+        content: 'Test content'
+      })
+    });
+    const r2MailData = await r2MailRes.json();
+    const r2MailBlocked = !r2MailData.delivered;
+
+    report(noEventsLeaked && r2CreateBlocked && r2MailBlocked,
+      'Isolation: R2 cannot access R1 calendar, create meetings, or send mail using R1 state or params');
+
+    // 8.5.3: Unconnected provider meeting creation returns clear error with no link saved
+    const unconnRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${r1Token}`
+      },
+      body: JSON.stringify({
+        meeting_format: 'teams',
+        date: '2026-11-07',
+        time: '14:00'
+      })
+    });
+    const unconnData = await unconnRes.json();
+    report(unconnRes.status === 400 && unconnData.error?.includes('Microsoft Teams is not connected'),
+      'Calendar: Creating meeting with unconnected provider returns clear error with no link saved',
+      `error: "${unconnData.error || ''}"`);
+
+    // 8.5.4: Optional provider check (Microsoft / Zoho)
+    const msInt = r1Ints.find(i => i.provider === 'microsoft' && i.service === 'meeting');
+    const zohoInt = r1Ints.find(i => i.provider === 'zoho' && i.service === 'meeting');
+    if (msInt) {
+      const msRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${r1Token}`
+        },
+        body: JSON.stringify({
+          meeting_format: 'teams',
+          date: '2026-11-08',
+          time: '15:00'
+        })
+      });
+      const msData = await msRes.json();
+      report(msData.event?.meeting_link?.includes('teams.microsoft.com'), 'Microsoft Teams meeting verified');
+    } else {
+      console.log('[SKIPPED] Optional provider: Microsoft Teams test account not connected (SKIPPED as expected)');
+    }
+
+    if (zohoInt) {
+      const zRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${r1Token}`
+        },
+        body: JSON.stringify({
+          meeting_format: 'zoho_meeting',
+          date: '2026-11-08',
+          time: '16:00'
+        })
+      });
+      const zData = await zRes.json();
+      report(zData.event?.meeting_link?.includes('zoho.com'), 'Zoho meeting verified');
+    } else {
+      console.log('[SKIPPED] Optional provider: Zoho Meeting test account not connected (SKIPPED as expected)');
+    }
+
+    // 8.5.5: Privacy: grep source and dist for console.log of email or token
+    let privacyViolations = 0;
+    function checkPrivacyLogs(dir) {
+      if (!fs.existsSync(dir)) return;
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const ent of entries) {
+        const fullPath = path.join(dir, ent.name);
+        if (ent.isDirectory()) {
+          checkPrivacyLogs(fullPath);
+        } else if (ent.isFile() && (ent.name.endsWith('.ts') || ent.name.endsWith('.tsx') || ent.name.endsWith('.js'))) {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const lines = content.split('\n');
+          for (const line of lines) {
+            if (/console\.log\s*\([^)]*(?:email|token)[^)]*\)/i.test(line)) {
+              privacyViolations++;
+              console.error(`Privacy violation in ${fullPath}: ${line.trim()}`);
+            }
+          }
+        }
+      }
+    }
+    checkPrivacyLogs(path.resolve(__dirname, '../src'));
+    checkPrivacyLogs(path.resolve(__dirname, '../api'));
+    if (fs.existsSync(path.resolve(__dirname, '../dist'))) {
+      checkPrivacyLogs(path.resolve(__dirname, '../dist'));
+    }
+    report(privacyViolations === 0, 'Privacy: Zero console.log of email or token in source and bundle', `violations: ${privacyViolations}`);
+
+  } catch (err) {
+    report(false, 'Integrations and isolation check failed', err.message);
+  }
+
   // CHECK 9: Cleanup
   console.log('\n--- CHECK 9: Cleanup of Test Entities ---');
   try {

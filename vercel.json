@@ -18,6 +18,10 @@
       "destination": "/api/emails/messages"
     },
     {
+      "source": "/api/integrations",
+      "destination": "/api/nango/check-connection?action=integrations"
+    },
+    {
       "source": "/api/send-email",
       "destination": "/api/emails/send"
     },

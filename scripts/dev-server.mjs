@@ -40,6 +40,7 @@ const routes = [
   { pattern: /^\/api\/screen-candidate(?:\?.*)?$/, file: '../api/screen-candidate.ts' },
   { pattern: /^\/api\/nango\/session(?:\?.*)?$/, file: '../api/nango/session.ts' },
   { pattern: /^\/api\/nango\/status(?:\?.*)?$/, file: '../api/nango/status.ts' },
+  { pattern: /^\/api\/integrations(?:\?.*)?$/, file: '../api/nango/check-connection.ts' },
   { pattern: /^\/api\/nango\/check-connection(?:\?.*)?$/, file: '../api/nango/check-connection.ts' },
 ];
 
