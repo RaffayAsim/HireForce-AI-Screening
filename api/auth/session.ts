@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createSessionToken, verifyAuth, hashPassword, verifyPassword } from "../_lib/auth.js";
+import { getTenantPlan } from "../_lib/plans.js";
 
 // Database-backed rate limiting helpers (stores in login_attempts or sys_rate_limit)
 async function getFailedAttempts(sb: any, key: string, windowMs = 15 * 60 * 1000): Promise<number> {
@@ -135,7 +136,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const action = req.query?.action || (req.url?.includes("/login") ? "login" : req.url?.includes("/signup") ? "signup" : "session");
+  const action = req.query?.action || (req.url?.includes("/login") ? "login" : req.url?.includes("/signup") ? "signup" : req.url?.includes("/plan") ? "plan" : "session");
 
   let body = req.body;
   if (typeof body === "string") {
@@ -168,6 +169,34 @@ export default async function handler(req: any, res: any) {
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  // ==========================================
+  // ACTION: PLAN (RECRUITER PLAN & QUOTA USAGE)
+  // Requires authenticated token; derives tenantId exclusively from token
+  // ==========================================
+  if (action === "plan") {
+    if (req.method !== "GET") {
+      return res.status(405).json({ success: false, error: "Method Not Allowed" });
+    }
+    try {
+      const authUser = await verifyAuth(req);
+      if (!authUser || !authUser.tenantId) {
+        return res.status(401).json({ success: false, error: "Unauthorized: Missing or invalid authentication token" });
+      }
+
+      const planInfo = await getTenantPlan(authUser.tenantId);
+      return res.status(200).json({
+        success: true,
+        tenant_id: authUser.tenantId,
+        plan: planInfo.plan,
+        screening_limit: planInfo.screening_limit,
+        screenings_used: planInfo.screenings_used,
+        is_trial: planInfo.plan === "free_trial",
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message || "Failed to get plan info" });
     }
   }
 
@@ -322,6 +351,15 @@ export default async function handler(req: any, res: any) {
           console.error("DB insert recruiter error:", insErr);
           return res.status(500).json({ success: false, error: "Failed to create recruiter account" });
         }
+
+        try {
+          await sb.from("tenant_plans").insert({
+            tenant_id: newTenantId,
+            plan: "free_trial",
+            screening_limit: 10,
+            screenings_used: 0,
+          });
+        } catch {}
       }
 
       const token = createSessionToken(newTenantId, 12);

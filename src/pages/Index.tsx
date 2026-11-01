@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { UpgradeRequestModal } from '@/components/subscription/UpgradeRequestModal';
 import { AlertTriangle, Zap as ZapIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { apiFetch } from '@/lib/authHeader';
 
 interface CompactMetricCardProps {
   title: string;
@@ -67,6 +68,29 @@ const Index = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tenantPlan, setTenantPlan] = useState<{
+    plan: string;
+    screening_limit: number;
+    screenings_used: number;
+    is_trial: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPlan = async () => {
+      try {
+        const res = await apiFetch('/api/plan');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setTenantPlan(data);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch plan info:', err);
+      }
+    };
+    fetchPlan();
+    return () => { isMounted = false; };
+  }, [user?.id]);
 
   useEffect(() => {
     setLoading(true);
@@ -152,8 +176,53 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Trial Status / Soft Pause Banner */}
-      {isTrial && (
+      {/* Free Trial Server Quota Banners */}
+      {tenantPlan && tenantPlan.is_trial && (
+        <div className={`mb-6 p-4 rounded-xl border transition-all ${
+          tenantPlan.screenings_used >= tenantPlan.screening_limit 
+            ? "bg-amber-500/10 border-amber-500/30 text-amber-900" 
+            : "bg-amber-500/10 border-amber-500/20 text-amber-900"
+        }`}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 bg-amber-500 text-white">
+                <AlertTriangle size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-zinc-900">
+                    {tenantPlan.screenings_used >= tenantPlan.screening_limit
+                      ? `Free trial: ${tenantPlan.screenings_used}/${tenantPlan.screening_limit} candidates used. Upgrade to keep screening.`
+                      : `${tenantPlan.screenings_used} of ${tenantPlan.screening_limit} free screenings used`}
+                  </h3>
+                  <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    tenantPlan.screenings_used >= tenantPlan.screening_limit
+                      ? "bg-amber-100 text-amber-800 border-amber-300"
+                      : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                  }`}>
+                    {tenantPlan.screenings_used >= tenantPlan.screening_limit ? "Limit Reached" : `${Math.max(0, tenantPlan.screening_limit - tenantPlan.screenings_used)} left`}
+                  </Badge>
+                </div>
+                <p className="text-xs text-zinc-600 mt-1 max-w-2xl leading-relaxed">
+                  {tenantPlan.screenings_used >= tenantPlan.screening_limit
+                    ? "Free trial quota reached. Upgrade your plan to screen more candidates and continue automatic AI evaluations."
+                    : `Warning: You have used ${tenantPlan.screenings_used} of ${tenantPlan.screening_limit} free candidate screenings. Upgrade to Pro for unlimited screenings.`}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => setUpgradeModalOpen(true)}
+              className="h-9 px-4 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm flex-shrink-0 bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20"
+            >
+              <ZapIcon size={14} />
+              Upgrade
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Trial Status / Soft Pause Banner (Fallback when tenantPlan not yet loaded) */}
+      {!tenantPlan && isTrial && (
         <div className={`mb-6 p-4 rounded-xl border transition-all ${
           isTrialExhausted 
             ? "bg-amber-500/10 border-amber-500/30 text-amber-900" 

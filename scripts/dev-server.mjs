@@ -28,6 +28,7 @@ const routes = [
   { pattern: /^\/api\/auth\/login(?:\?.*)?$/, file: '../api/auth/session.ts' },
   { pattern: /^\/api\/auth\/signup(?:\?.*)?$/, file: '../api/auth/session.ts' },
   { pattern: /^\/api\/auth\/session(?:\?.*)?$/, file: '../api/auth/session.ts' },
+  { pattern: /^\/api\/plan(?:\?.*)?$/, file: '../api/auth/session.ts', defaultAction: 'plan' },
   { pattern: /^\/api\/apply(?:\?.*)?$/, file: '../api/apply.ts' },
   { pattern: /^\/api\/candidates\/([^/?]+)(?:\?.*)?$/, file: '../api/candidates/[id].ts', isParam: true },
   { pattern: /^\/api\/candidates(?:\?.*)?$/, file: '../api/candidates/index.ts' },
@@ -91,6 +92,9 @@ export function createLocalServer() {
 
     if (paramValue) {
       req.query.id = paramValue;
+    }
+    if (matched.defaultAction && !req.query.action) {
+      req.query.action = matched.defaultAction;
     }
 
     try {

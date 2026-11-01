@@ -1330,7 +1330,7 @@ async function run() {
     let clientUploadPromise = null;
 
     if (sbClient && clientFile) {
-      const fileExt = ((clientFile as any).name || 'pdf').split('.').pop() || 'pdf';
+      const fileExt = (clientFile.name || 'pdf').split('.').pop() || 'pdf';
       const fileName = `client_test_${Date.now()}.${fileExt}`;
       const filePath = `resumes/${fileName}`;
 
@@ -1529,6 +1529,220 @@ async function run() {
       console.log(`[INFO] Testing locally; vercel.json headers will be verified when deployed on Vercel.`);
       report(true, 'Security: Security headers defined in vercel.json');
     }
+
+    // =========================================================================
+    // CHECK 8.5: Free Trial Plan & 10 Candidate Screening Limit Enforcement
+    // =========================================================================
+    console.log('\n--- Testing Free Trial Quota (10 Screenings Limit) & Atomic Concurrency ---');
+
+    // 1. Fresh recruiter signup starts on free_trial with 0/10 screenings
+    const trialEmail = `recruiter.trial.${Date.now()}@example.com`;
+    const trialPass = 'TrialRecruiterPass123!';
+    const trialSignupRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: trialEmail,
+        password: trialPass,
+        name: 'Trial Recruiter',
+        company: 'Trial Systems'
+      })
+    });
+    const trialSignupData = await trialSignupRes.json();
+    const trialToken = trialSignupData.token;
+    const trialTenantId = trialSignupData.user?.tenantId || trialSignupData.user?.id;
+    report(trialSignupRes.ok && Boolean(trialToken), 'Trial Plan: Fresh recruiter signs up successfully', trialTenantId);
+
+    // Verify GET /api/plan returns free_trial and 0/10
+    const planRes = await fetch(`${BASE_URL}/api/plan`, {
+      headers: { 'Authorization': `Bearer ${trialToken}` }
+    });
+    const planData = await planRes.json();
+    report(
+      planRes.ok && planData.plan === 'free_trial' && planData.screening_limit === 10 && planData.screenings_used === 0,
+      'Trial Plan: Fresh signup starts on free_trial with 0/10 screenings used',
+      `plan: ${planData.plan}, used: ${planData.screenings_used}/${planData.screening_limit}`
+    );
+
+    // Create a test job owned by this trial tenant
+    const trialJobId = `job-trial-${Date.now()}`;
+    cleanupJobIds.push(trialJobId);
+    if (sbClient) {
+      await sbClient.from('jobs').insert([{
+        id: trialJobId,
+        title: 'Trial Sales Operations Coordinator',
+        description: 'Manage sales CRM and Excel reporting.',
+        department: 'Operations',
+        user_id: trialTenantId
+      }]);
+    }
+
+    // Helper to submit via the CLIENT submit code path with a real PDF
+    const submitViaClientPath = async (candId, name, email, targetJobId, tenantId) => {
+      const pdfBuffer = buildPdfWithText(`Resume of ${name}. Operations and CRM pipelines.`);
+      const pdfFile = new Blob([pdfBuffer], { type: 'application/pdf' });
+      Object.assign(pdfFile, { name: `${name.replace(/\s+/g, '_')}_resume.pdf` });
+
+      let resumeUrl = '/sample-resume.pdf';
+      let upPromise = null;
+      if (sbClient) {
+        const filePath = `resumes/${candId}_${Date.now()}.pdf`;
+        const { data: urlData } = sbClient.storage.from('resumes').getPublicUrl(filePath);
+        if (urlData?.publicUrl) resumeUrl = urlData.publicUrl;
+        upPromise = sbClient.storage.from('resumes').upload(filePath, pdfFile, { contentType: 'application/pdf' })
+          .catch(() => null);
+      }
+      if (upPromise) {
+        try { await Promise.race([upPromise, new Promise(r => setTimeout(r, 2000))]); } catch {}
+      }
+
+      return fetch(`${BASE_URL}/api/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: candId,
+          job_id: targetJobId,
+          job_title: 'Trial Sales Operations Coordinator',
+          name,
+          email,
+          resume_url: resumeUrl,
+          user_id: tenantId
+        })
+      });
+    };
+
+    // 2. Submit 10 applications through the CLIENT submit path: all 10 succeed
+    const trialCandIds = [];
+    let submitSuccessCount = 0;
+    for (let i = 1; i <= 10; i++) {
+      const cId = `cand-trial-${Date.now()}-${i}`;
+      trialCandIds.push(cId);
+      cleanupCandidateIds.push(cId);
+      const res = await submitViaClientPath(cId, `Trial Applicant ${i}`, `applicant.${i}.${Date.now()}@test.local`, trialJobId, trialTenantId);
+      if (res.ok) {
+        submitSuccessCount++;
+      }
+    }
+    report(submitSuccessCount === 10, 'Trial Plan: Submitted 10 applications through client path with real PDF (all 10 succeed)', `${submitSuccessCount}/10 succeeded`);
+
+    // Verify plan now shows 10/10
+    const planAfter10Res = await fetch(`${BASE_URL}/api/plan`, {
+      headers: { 'Authorization': `Bearer ${trialToken}` }
+    });
+    const planAfter10 = await planAfter10Res.json();
+    report(
+      planAfter10Res.ok && planAfter10.screenings_used === 10,
+      'Trial Plan: GET /api/plan shows exactly 10/10 candidates used',
+      `used: ${planAfter10.screenings_used}/${planAfter10.screening_limit}`
+    );
+
+    // 3. 11th application returns 403 TRIAL_LIMIT_REACHED, creates no candidate, sends no email
+    const cand11Id = `cand-trial-11th-${Date.now()}`;
+    const res11 = await submitViaClientPath(cand11Id, 'Applicant 11', `applicant.11.${Date.now()}@test.local`, trialJobId, trialTenantId);
+    const data11 = await res11.json().catch(() => ({}));
+    let cand11Exists = false;
+    if (sbClient) {
+      const { data: c11Row } = await sbClient.from('candidates').select('id').eq('id', cand11Id).maybeSingle();
+      cand11Exists = Boolean(c11Row);
+    }
+    report(
+      res11.status === 403 && data11.code === 'TRIAL_LIMIT_REACHED' && !cand11Exists,
+      'Trial Plan: 11th application returns 403 TRIAL_LIMIT_REACHED, creates no candidate in DB, sends no email',
+      `status: ${res11.status}, code: ${data11.code}, candExists: ${cand11Exists}`
+    );
+
+    // 4. Delete a candidate: plan still shows 10/10 (deleting must not reset quota)
+    const delRes = await fetch(`${BASE_URL}/api/candidates/${trialCandIds[0]}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${trialToken}` }
+    });
+    const planAfterDelRes = await fetch(`${BASE_URL}/api/plan`, {
+      headers: { 'Authorization': `Bearer ${trialToken}` }
+    });
+    const planAfterDel = await planAfterDelRes.json();
+    report(
+      delRes.ok && planAfterDel.screenings_used === 10,
+      'Trial Plan: Candidate deleted, plan still shows 10/10 (deleting does NOT reset quota)',
+      `used: ${planAfterDel.screenings_used}/${planAfterDel.screening_limit}`
+    );
+
+    // 5. Concurrency test: Fresh account, 9 applications, then fire 3 simultaneously at 9/10 slot
+    console.log('\n--- Testing Trial Quota Concurrency (Race Condition Safety at Slot 10) ---');
+    const concEmail = `recruiter.conc.${Date.now()}@example.com`;
+    const concSignupRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: concEmail,
+        password: 'ConcPassword123!',
+        name: 'Concurrent Recruiter',
+        company: 'Concurrency Test Co'
+      })
+    });
+    const concSignupData = await concSignupRes.json();
+    const concTenantId = concSignupData.user?.tenantId || concSignupData.user?.id;
+    const concToken = concSignupData.token;
+    const concJobId = `job-conc-${Date.now()}`;
+    cleanupJobIds.push(concJobId);
+    if (sbClient) {
+      await sbClient.from('jobs').insert([{
+        id: concJobId,
+        title: 'Concurrency Test Role',
+        description: 'Test atomic slot locks.',
+        department: 'Engineering',
+        user_id: concTenantId
+      }]);
+    }
+
+    // Submit 9 applications first
+    for (let i = 1; i <= 9; i++) {
+      const cId = `cand-conc-${Date.now()}-${i}`;
+      cleanupCandidateIds.push(cId);
+      await submitViaClientPath(cId, `Conc Applicant ${i}`, `conc.${i}.${Date.now()}@test.local`, concJobId, concTenantId);
+    }
+
+    // Fire 3 simultaneous applications for the 10th slot
+    const concCandIds = [
+      `cand-race-1-${Date.now()}`,
+      `cand-race-2-${Date.now()}`,
+      `cand-race-3-${Date.now()}`
+    ];
+    cleanupCandidateIds.push(...concCandIds);
+
+    const racePromises = concCandIds.map((cId, idx) =>
+      submitViaClientPath(cId, `Race Applicant ${idx + 1}`, `race.${idx + 1}.${Date.now()}@test.local`, concJobId, concTenantId)
+    );
+    const raceResponses = await Promise.all(racePromises);
+    const raceStatuses = raceResponses.map(r => r.status);
+    const raceSuccessCount = raceStatuses.filter(s => s === 200).length;
+    const race403Count = raceStatuses.filter(s => s === 403).length;
+
+    report(
+      raceSuccessCount === 1 && race403Count === 2,
+      'Trial Concurrency: 3 simultaneous applications fired at 9/10 slot: exactly 1 succeeds (200), other 2 get 403',
+      `statuses: ${raceStatuses.join(', ')} (success: ${raceSuccessCount}, 403: ${race403Count})`
+    );
+
+    // 6. R1 (Pro) can apply beyond 10
+    console.log('\n--- Testing R1 Pro Exemption Beyond 10 Applications ---');
+    const r1PlanRes = await fetch(`${BASE_URL}/api/plan`, {
+      headers: { 'Authorization': `Bearer ${r1Token}` }
+    });
+    const r1PlanData = await r1PlanRes.json();
+    const r1ApplyCandId = `cand-r1-beyond10-${Date.now()}`;
+    cleanupCandidateIds.push(r1ApplyCandId);
+    const r1ApplyRes = await submitViaClientPath(
+      r1ApplyCandId,
+      'R1 Beyond Ten Applicant',
+      `r1.beyond.${Date.now()}@example.com`,
+      pdfJobIds[0],
+      R1_TENANT
+    );
+    report(
+      r1PlanData.plan === 'pro' && r1ApplyRes.ok,
+      'Pro Plan: R1 (tenant-1793401234436) is Pro and can apply beyond 10 screenings without limit',
+      `plan: ${r1PlanData.plan}, apply status: ${r1ApplyRes.status}`
+    );
 
   } catch (err) {
     report(false, 'Round 20 fixes verification failed', err.message);

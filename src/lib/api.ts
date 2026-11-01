@@ -429,8 +429,17 @@ export const createCandidateApplication = async (data: any, userId?: string) => 
       if (applyData.candidate?.user_id) {
         effectiveUserId = applyData.candidate.user_id;
       }
+    } else if (applyRes && applyRes.status === 403) {
+      const errData = await applyRes.json().catch(() => ({}));
+      const err: any = new Error(errData.error || "This position is no longer accepting applications.");
+      err.code = errData.code || "TRIAL_LIMIT_REACHED";
+      err.status = 403;
+      throw err;
     }
-  } catch (apiErr) {
+  } catch (apiErr: any) {
+    if (apiErr?.status === 403 || apiErr?.code === "TRIAL_LIMIT_REACHED") {
+      throw apiErr;
+    }
     console.warn('Server application submission error:', apiErr);
   }
 

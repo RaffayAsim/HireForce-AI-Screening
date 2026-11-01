@@ -53,6 +53,10 @@
       "destination": "/api/emails/send"
     },
     {
+      "source": "/api/plan",
+      "destination": "/api/auth/session?action=plan"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

@@ -38,6 +38,7 @@ const Apply = () => {
   });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isClosed, setIsClosed] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [customQuestions, setCustomQuestions] = useState<string[]>([]);
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -97,11 +98,6 @@ const Apply = () => {
     e.preventDefault();
     if (!jobId) return;
 
-    if (isTrial && hasReachedScanLimit()) {
-      setShowLimitModal(true);
-      return;
-    }
-
     setLoading(true);
     const formElement = e.target as HTMLFormElement;
     const formData = new FormData(formElement);
@@ -138,11 +134,36 @@ const Apply = () => {
       showSuccess('Application submitted successfully!');
     } catch (error: any) {
       console.error('Application error:', error);
-      showError(error?.message || 'Failed to submit application. Please try again.');
+      if (error?.status === 403 || error?.code === 'TRIAL_LIMIT_REACHED' || error?.message?.includes('no longer accepting applications')) {
+        setIsClosed(true);
+        showError('This position is no longer accepting applications.');
+      } else {
+        showError(error?.message || 'Failed to submit application. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (isClosed || job?.status === 'Closed') {
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-6 text-zinc-900 font-sans">
+        <Card className="w-full max-w-md bg-white border border-zinc-200/90 shadow-sm rounded-xl overflow-hidden text-center p-8">
+          <div className="w-12 h-12 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
+            <AlertCircle size={24} />
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900 mb-1.5">No Longer Accepting Applications</h1>
+          <p className="text-xs text-zinc-500 mb-6 leading-relaxed">
+            This position is no longer accepting applications at this time. Thank you for your interest.
+          </p>
+          <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-md inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
+            <AlertCircle size={14} className="text-zinc-500" />
+            Position Closed
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (

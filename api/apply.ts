@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { waitUntil } from "@vercel/functions";
 import { createSessionToken } from "./_lib/auth.js";
+import { incrementScreeningUsage } from "./_lib/plans.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -57,6 +58,18 @@ export default async function handler(req: any, res: any) {
     }
 
     const jobOwnerId = job?.user_id || data.user_id || null;
+
+    // Atomically check & increment screening quota BEFORE candidate insertion
+    if (jobOwnerId) {
+      const planCheck = await incrementScreeningUsage(jobOwnerId);
+      if (!planCheck.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: "This position is no longer accepting applications.",
+          code: "TRIAL_LIMIT_REACHED"
+        });
+      }
+    }
     const candidateId = data.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `cand-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`);
 
     const candidateRecord = {
