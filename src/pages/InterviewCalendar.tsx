@@ -139,9 +139,10 @@ const InterviewCalendar = () => {
     if (!selectedInterview) return;
     setIsProcessingAction(true);
     try {
+      const gId = (selectedInterview as any).google_event_id || selectedInterview.id;
       const res = await apiFetch('/api/calendar/events', {
         method: 'PATCH',
-        body: JSON.stringify({ id: selectedInterview.id, status: 'Cancelled' }),
+        body: JSON.stringify({ id: selectedInterview.id, google_event_id: gId, status: 'Cancelled' }),
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
@@ -165,9 +166,10 @@ const InterviewCalendar = () => {
     if (!window.confirm('Are you sure you want to delete this interview session?')) return;
     setIsProcessingAction(true);
     try {
-      const res = await apiFetch(`/api/calendar/events?id=${encodeURIComponent(selectedInterview.id)}`, {
+      const gId = (selectedInterview as any).google_event_id || selectedInterview.id;
+      const res = await apiFetch(`/api/calendar/events?id=${encodeURIComponent(selectedInterview.id)}&google_event_id=${encodeURIComponent(gId)}`, {
         method: 'DELETE',
-        body: JSON.stringify({ id: selectedInterview.id }),
+        body: JSON.stringify({ id: selectedInterview.id, google_event_id: gId }),
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
@@ -175,7 +177,7 @@ const InterviewCalendar = () => {
         setIsProcessingAction(false);
         return;
       }
-      deleteInterview(selectedInterview.id, user?.id);
+      deleteInterview(selectedInterview.id, user?.id, selectedInterview.candidate_id, selectedInterview.date, selectedInterview.time);
       setSelectedInterview(null);
       showSuccess('Interview deleted successfully');
       loadInterviews();
@@ -217,7 +219,9 @@ const InterviewCalendar = () => {
         data.events.forEach((remote: any) => {
           const index = combined.findIndex(c =>
             c.id === remote.id ||
-            (c.candidate_email && remote.candidate_email && c.candidate_email.toLowerCase() === remote.candidate_email.toLowerCase() && c.date.split('T')[0] === remote.date.split('T')[0]) ||
+            (c as any).google_event_id === remote.id ||
+            (c.candidate_id && remote.candidate_id && c.candidate_id === remote.candidate_id && c.date?.split('T')[0] === remote.date?.split('T')[0] && c.time === remote.time) ||
+            (c.candidate_email && remote.candidate_email && c.candidate_email.toLowerCase() === remote.candidate_email.toLowerCase() && c.date?.split('T')[0] === remote.date?.split('T')[0]) ||
             (c.meeting_link && remote.meeting_link && c.meeting_link === remote.meeting_link)
           );
 
@@ -225,25 +229,43 @@ const InterviewCalendar = () => {
             combined[index] = {
               ...remote,
               ...combined[index],
+              id: remote.id || combined[index].id,
+              google_event_id: remote.id || (combined[index] as any).google_event_id,
               user_id: user.id,
-              meeting_format: combined[index].meeting_format || remote.meeting_format || (combined[index].phone_number || remote.phone_number ? 'phone' : 'google_meet'),
+              meeting_format: remote.meeting_format || combined[index].meeting_format || (remote.meeting_link?.includes('teams') ? 'teams' : 'google_meet'),
+              meeting_link: remote.meeting_link || combined[index].meeting_link,
               phone_number: combined[index].phone_number || remote.phone_number,
             };
           } else {
             combined.push({
               ...remote,
+              google_event_id: remote.id,
               user_id: user.id,
               duration_minutes: remote.duration_minutes || remote.duration || 45,
               round_type: remote.round_type || 'Technical Round',
               status: remote.status === 'scheduled' ? 'Scheduled' : (remote.status || 'Scheduled'),
               interviewer: remote.interviewer || remote.host_recruiter || 'Talent Acquisition Team',
-              meeting_format: remote.meeting_format || remote.format || (remote.phone_number ? 'phone' : remote.meeting_link?.includes('teams') ? 'teams' : 'google_meet'),
+              meeting_format: remote.meeting_format || remote.format || (remote.meeting_link?.includes('teams') ? 'teams' : 'google_meet'),
             });
           }
         });
 
+        // Deduplicate entire list strictly by ID or (candidate_id + date + time)
+        const seen = new Set<string>();
+        const deduplicated: any[] = [];
+        for (const item of combined) {
+          const key1 = item.id;
+          const key2 = item.candidate_id && item.date ? `${item.candidate_id}_${item.date}_${item.time || ''}` : null;
+          if (seen.has(key1) || (key2 && seen.has(key2))) {
+            continue;
+          }
+          seen.add(key1);
+          if (key2) seen.add(key2);
+          deduplicated.push(item);
+        }
+
         // Filter strictly by user_id
-        const userScopedCombined = combined.filter(int => !int.user_id || int.user_id === user.id);
+        const userScopedCombined = deduplicated.filter(int => !int.user_id || int.user_id === user.id);
         setInterviews(userScopedCombined);
 
         if (typeof window !== 'undefined') {

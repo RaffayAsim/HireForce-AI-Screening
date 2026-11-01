@@ -1,18 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth } from "./_lib/auth.js";
 
-async function extractTextFromPdf(buf: Uint8Array): Promise<string> {
+async function extractTextFromPdf(buf: Uint8Array): Promise<{ ok: boolean; text: string }> {
   try {
     const { extractText } = await import("unpdf");
     const result = await extractText(buf);
     const pages = Array.isArray(result?.text) ? result.text.join("\n") : (result?.text || "");
-    if (pages && pages.trim().length > 15) {
-      return pages.replace(/\s+/g, " ").trim().slice(0, 4500);
-    }
+    const clean = (pages || "").replace(/\s+/g, " ").trim().slice(0, 4500);
+    return { ok: true, text: clean };
   } catch (err) {
     console.warn("unpdf extraction error:", err);
+    return { ok: false, text: "" };
   }
-  return "";
 }
 
 export async function evaluateCandidate(data: any) {
@@ -63,6 +62,13 @@ export async function evaluateCandidate(data: any) {
         .eq("id", candidateId)
         .single();
 
+      if (existingCand && existingCand.screening_summary?.includes("<!-- RESUME_TEXT_CACHE -->")) {
+        const cached = existingCand.screening_summary.split("<!-- RESUME_TEXT_CACHE -->\n")[1]?.trim();
+        if (cached) {
+          resumeText = cached;
+        }
+      }
+
       if (existingCand && existingCand.screening_score !== null && existingCand.screening_score !== undefined && existingCand.screening_summary) {
         return {
           success: true,
@@ -86,21 +92,47 @@ export async function evaluateCandidate(data: any) {
       resumeText.includes("PDF container");
 
     let pdfExtractionFailed = false;
+    let pdfDownloadedAndParsed = false;
+
     if (isGarbageText && resumeUrl && (resumeUrl.startsWith("http://") || resumeUrl.startsWith("https://"))) {
-      let extractedSuccess = false;
-      // Retry once if extraction fails or times out
-      for (let attempt = 0; attempt < 2; attempt++) {
+      // 3 tries with backoff over ~6s: 0s, 1.5s, 2.5s
+      const delays = [0, 1500, 2500];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (delays[attempt] > 0) {
+          await new Promise(r => setTimeout(r, delays[attempt]));
+        }
+
         try {
-          const controller = new AbortController();
-          const fetchTimeout = setTimeout(() => controller.abort(), 4000);
-          const fetchPdf = await fetch(resumeUrl, { signal: controller.signal });
-          clearTimeout(fetchTimeout);
-          if (fetchPdf.ok) {
-            const arrayBuf = await fetchPdf.arrayBuffer();
-            const extracted = await extractTextFromPdf(new Uint8Array(arrayBuf));
-            if (extracted && extracted.trim().length > 15) {
-              resumeText = extracted;
-              extractedSuccess = true;
+          let arrayBuf: ArrayBuffer | null = null;
+
+          // 1. Download directly using Supabase service role client if it's a Supabase storage URL
+          if (sb && resumeUrl.includes("/resumes/")) {
+            const rawPath = resumeUrl.split("/resumes/")[1]?.split("?")[0];
+            if (rawPath) {
+              const decodedPath = decodeURIComponent(rawPath);
+              const { data: blob, error: dlErr } = await sb.storage.from("resumes").download(decodedPath);
+              if (!dlErr && blob) {
+                arrayBuf = await blob.arrayBuffer();
+              }
+            }
+          }
+
+          // 2. Fallback to public fetch
+          if (!arrayBuf) {
+            const controller = new AbortController();
+            const fetchTimeout = setTimeout(() => controller.abort(), 4500);
+            const fetchPdf = await fetch(resumeUrl, { signal: controller.signal });
+            clearTimeout(fetchTimeout);
+            if (fetchPdf.ok) {
+              arrayBuf = await fetchPdf.arrayBuffer();
+            }
+          }
+
+          if (arrayBuf && arrayBuf.byteLength > 0) {
+            const extractRes = await extractTextFromPdf(new Uint8Array(arrayBuf));
+            if (extractRes.ok) {
+              resumeText = extractRes.text;
+              pdfDownloadedAndParsed = true;
               break;
             }
           }
@@ -108,7 +140,8 @@ export async function evaluateCandidate(data: any) {
           console.warn(`Could not extract PDF text from URL (attempt ${attempt + 1}):`, err);
         }
       }
-      if (!extractedSuccess) {
+
+      if (!pdfDownloadedAndParsed) {
         pdfExtractionFailed = true;
       }
     }
@@ -657,9 +690,12 @@ export async function evaluateCandidate(data: any) {
     // Direct write to Supabase - NEVER OVERWRITE candidate status
     if (candidateId) {
       try {
+        const savedSummary = resumeText
+          ? `${screeningResult.summary}\n\n<!-- RESUME_TEXT_CACHE -->\n${resumeText}`
+          : screeningResult.summary;
         await sb.from("candidates").update({
           screening_score: screeningResult.score,
-          screening_summary: screeningResult.summary,
+          screening_summary: savedSummary,
         }).eq("id", candidateId);
       } catch (sbErr) {
         console.warn("Error updating candidate in Supabase:", sbErr);

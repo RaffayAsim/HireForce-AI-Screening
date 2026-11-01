@@ -68,22 +68,26 @@ export default async function handler(req: any, res: any) {
 
         const desc = item.description || "";
         const parsedCandidate = desc.match(/Candidate:\s*([^\n\r]+)/)?.[1]?.trim() || item.summary?.replace(/^(?:Phone|Physical)?\s*Interview:\s*/i, "").trim();
+        const parsedCandidateId = desc.match(/CandidateId:\s*([^\n\r]+)/)?.[1]?.trim() || item.id;
         const parsedEmail = desc.match(/Email:\s*([^\n\r]+)/)?.[1]?.trim() || item.attendees?.[0]?.email || "";
         const parsedRole = desc.match(/(?:Role|Job Title):\s*([^\n\r]+)/)?.[1]?.trim() || "Evaluated Position";
         const parsedPhone = desc.match(/Phone:\s*([^\n\r]+)/)?.[1]?.trim() || "";
+        const parsedInterviewer = desc.match(/Interviewer:\s*([^\n\r]+)/)?.[1]?.trim() || "Talent Acquisition Team";
 
         let format: "phone" | "teams" | "google_meet" | "in_person" = "google_meet";
-        if (desc.includes("Format: phone") || item.summary?.toLowerCase().includes("phone interview") || parsedPhone) {
-          format = "phone";
-        } else if (desc.includes("Format: teams") || item.summary?.toLowerCase().includes("teams")) {
+        if (item.hangoutLink || desc.includes("Format: Google Meet") || desc.includes("meet.google.com")) {
+          format = "google_meet";
+        } else if (desc.includes("Format: teams") || desc.includes("teams.microsoft.com") || item.summary?.toLowerCase().includes("teams")) {
           format = "teams";
+        } else if (desc.includes("Format: phone") || item.summary?.toLowerCase().includes("phone interview")) {
+          format = "phone";
         } else if (desc.includes("Format: physical") || desc.includes("Format: in_person")) {
           format = "in_person";
         }
 
         events.push({
           id: item.id,
-          candidate_id: item.id,
+          candidate_id: parsedCandidateId,
           candidate_name: parsedCandidate,
           candidate_email: parsedEmail,
           job_id: "job-general",
@@ -96,7 +100,7 @@ export default async function handler(req: any, res: any) {
           date: dateStr,
           time: timeStr,
           duration_minutes: 45,
-          interviewer: "Talent Acquisition Team",
+          interviewer: parsedInterviewer,
           status: "Scheduled",
           user_id: effectiveTenantId,
         });
@@ -192,9 +196,11 @@ export default async function handler(req: any, res: any) {
                 summary: summaryTitle,
                 description: [
                   `Candidate: ${candidate_name}`,
+                  candidate_id ? `CandidateId: ${candidate_id}` : "",
                   candidate_email ? `Email: ${candidate_email}` : "",
                   `Role: ${job_title}`,
                   `Format: ${formatDisplayName}`,
+                  interviewer ? `Interviewer: ${interviewer}` : "",
                   phone_number ? `Phone: ${phone_number}` : "",
                   `Round: ${round_type}`,
                   notes ? `Notes: ${notes}` : "",
@@ -230,7 +236,7 @@ export default async function handler(req: any, res: any) {
 
               if (gResp.ok) {
                 const gData = await gResp.json();
-                createdEventObj.id = createdEventObj.id || gData.id;
+                createdEventObj.id = gData.id;
                 createdEventObj.google_event_id = gData.id;
                 if (gData.hangoutLink) {
                   createdEventObj.meeting_link = gData.hangoutLink;
@@ -377,14 +383,15 @@ export default async function handler(req: any, res: any) {
   if (req.method === "PATCH") {
     try {
       const data = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-      const { id, status = "Cancelled" } = data;
-      if (!id) {
+      const { id, status = "Cancelled", google_event_id } = data;
+      const targetGId = google_event_id || id;
+      if (!id && !targetGId) {
         return res.status(400).json({ success: false, error: "Interview ID is required" });
       }
 
-      // If connected to Google Calendar, attempt to update or cancel remote event
+      // If connected to Google Calendar, cancel/delete provider event so guests get cancellation notice
       const calInt = await getIntegration(effectiveTenantId, "google", "calendar");
-      if (calInt) {
+      if (calInt && status === "Cancelled" && targetGId) {
         const key = getNangoKey();
         if (key) {
           try {
@@ -394,16 +401,9 @@ export default async function handler(req: any, res: any) {
             const detailData = await detailResp.json();
             const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
             if (accessToken) {
-              await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${id}`, {
-                method: "PATCH",
-                headers: {
-                  "Authorization": `Bearer ${accessToken}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  status: "cancelled",
-                  summary: `[Cancelled] Interview`
-                })
+              await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(targetGId)}?sendUpdates=all`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${accessToken}` }
               }).catch(() => {});
             }
           } catch {}
@@ -412,7 +412,7 @@ export default async function handler(req: any, res: any) {
 
       return res.status(200).json({
         success: true,
-        event: { id, status },
+        event: { id, status, google_event_id: null },
         message: "Interview session status updated successfully"
       });
     } catch (err: any) {
@@ -424,13 +424,15 @@ export default async function handler(req: any, res: any) {
     try {
       const data = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
       const id = req.query?.id || data?.id;
-      if (!id) {
+      const google_event_id = req.query?.google_event_id || data?.google_event_id;
+      const targetGId = google_event_id || id;
+      if (!id && !targetGId) {
         return res.status(400).json({ success: false, error: "Interview ID is required" });
       }
 
       // If connected to Google Calendar, delete remote event
       const calInt = await getIntegration(effectiveTenantId, "google", "calendar");
-      if (calInt) {
+      if (calInt && targetGId) {
         const key = getNangoKey();
         if (key) {
           try {
@@ -440,7 +442,7 @@ export default async function handler(req: any, res: any) {
             const detailData = await detailResp.json();
             const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
             if (accessToken) {
-              await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${id}`, {
+              await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(targetGId)}?sendUpdates=all`, {
                 method: "DELETE",
                 headers: { "Authorization": `Bearer ${accessToken}` }
               }).catch(() => {});

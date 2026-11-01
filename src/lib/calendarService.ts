@@ -1,4 +1,5 @@
 import { getAuthHeaders } from './authHeader';
+import { getCurrentAuthUserId } from './connectedAccountService';
 
 export interface Interview {
   id: string;
@@ -152,7 +153,13 @@ export const saveInterviewAsync = async (interview: Omit<Interview, 'id'>, userI
     throw new Error('Google Calendar did not return a valid Google Meet link.');
   }
 
-  const updated = [finalInterview, ...interviews.filter(i => i.id !== finalInterview.id)];
+  // Deduplicate against existing interviews by ID or (candidate_id, date, time)
+  const isDuplicate = (i: Interview) =>
+    i.id === finalInterview.id ||
+    (finalInterview.candidate_id && i.candidate_id === finalInterview.candidate_id && i.date === finalInterview.date && i.time === finalInterview.time) ||
+    (finalInterview.meeting_link && i.meeting_link === finalInterview.meeting_link);
+
+  const updated = [finalInterview, ...interviews.filter(i => !isDuplicate(i))];
   if (typeof window !== 'undefined' && targetUserId) {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -168,7 +175,14 @@ export const updateInterviewStatus = (id: string, status: Interview['status'], u
   const targetUserId = userId || getCurrentAuthUserId() || undefined;
   if (!targetUserId) return;
   const interviews = getInterviews(targetUserId);
-  const updated = interviews.map(i => i.id === id ? { ...i, status } : i);
+  const target = interviews.find(i => i.id === id);
+  const updated = interviews.map(i => {
+    if (i.id === id) return { ...i, status };
+    if (target && target.candidate_id && i.candidate_id === target.candidate_id && i.date === target.date && i.time === target.time) {
+      return { ...i, status };
+    }
+    return i;
+  });
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -178,11 +192,20 @@ export const updateInterviewStatus = (id: string, status: Interview['status'], u
   window.dispatchEvent(new Event('local_interviews_updated'));
 };
 
-export const deleteInterview = (id: string, userId?: string) => {
+export const deleteInterview = (id: string, userId?: string, candidateId?: string, date?: string, time?: string) => {
   const targetUserId = userId || getCurrentAuthUserId() || undefined;
   if (!targetUserId) return;
   const interviews = getInterviews(targetUserId);
-  const updated = interviews.filter(i => i.id !== id);
+  const target = interviews.find(i => i.id === id);
+  const cId = candidateId || target?.candidate_id;
+  const dStr = date || target?.date;
+  const tStr = time || target?.time;
+
+  const updated = interviews.filter(i => {
+    if (i.id === id) return false;
+    if (cId && dStr && tStr && i.candidate_id === cId && i.date === dStr && i.time === tStr) return false;
+    return true;
+  });
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY);

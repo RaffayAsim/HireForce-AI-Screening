@@ -381,7 +381,17 @@ export const createCandidateApplication = async (data: any, userId?: string) => 
     }
   }
 
-  // 1. Submit to server-side /api/apply concurrently with storage upload (< 2s submit time)
+  // 1. Ensure storage upload completes (or timeout after 3.5s) before invoking server /api/apply
+  if (uploadPromise) {
+    try {
+      await Promise.race([
+        uploadPromise,
+        new Promise(r => setTimeout(r, 3500))
+      ]);
+    } catch {}
+  }
+
+  // 2. Submit to server-side /api/apply (< 2s submit time)
   try {
     const applyPromise = fetch('/api/apply', {
       method: 'POST',
@@ -402,7 +412,7 @@ export const createCandidateApplication = async (data: any, userId?: string) => 
       }),
     });
 
-    const [applyRes] = await Promise.all([applyPromise, uploadPromise || Promise.resolve()]);
+    const applyRes = await applyPromise;
     if (applyRes && applyRes.ok) {
       const applyData = await applyRes.json();
       if (applyData.candidate?.user_id) {

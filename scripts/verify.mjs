@@ -45,6 +45,49 @@ function report(pass, name, details = '') {
   }
 }
 
+function buildPdfWithText(text) {
+  const escaped = text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const stream = `BT\n/F1 12 Tf\n50 700 Td\n(${escaped}) Tj\nET`;
+  const streamLen = Buffer.byteLength(stream, 'utf8');
+  let out = `%PDF-1.4\n`;
+  const offsets = [];
+  offsets.push(out.length);
+  out += `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+  offsets.push(out.length);
+  out += `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n`;
+  offsets.push(out.length);
+  out += `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n`;
+  offsets.push(out.length);
+  out += `4 0 obj\n<< /Length ${streamLen} >>\nstream\n${stream}\nendstream\nendobj\n`;
+  offsets.push(out.length);
+  out += `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`;
+  const xrefOffset = out.length;
+  out += `xref\n0 6\n0000000000 65535 f \n`;
+  for (const off of offsets) {
+    out += `${String(off).padStart(10, '0')} 00000 n \n`;
+  }
+  out += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(out, 'utf8');
+}
+
+function buildBlankPdf() {
+  let out = `%PDF-1.4\n`;
+  const offsets = [];
+  offsets.push(out.length);
+  out += `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+  offsets.push(out.length);
+  out += `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n`;
+  offsets.push(out.length);
+  out += `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << >> >>\nendobj\n`;
+  const xrefOffset = out.length;
+  out += `xref\n0 4\n0000000000 65535 f \n`;
+  for (const off of offsets) {
+    out += `${String(off).padStart(10, '0')} 00000 n \n`;
+  }
+  out += `trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(out, 'utf8');
+}
+
 // Track created test artifacts for cleanup
 const cleanupCandidateIds = [];
 const cleanupJobIds = [];
@@ -1127,47 +1170,219 @@ async function run() {
       'Unreadable Guard: Normal text resume (>50 chars) is NEVER flagged 0% unreadable',
       `score: ${normalScreenData.screening?.score}, fit: ${normalScreenData.screening?.fit_level}`);
 
-    // 5. Calendar event PATCH (Cancel) & DELETE
-    const testInterviewRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+    // ----------------------------------------------------
+    // ROUND 21: Real PDF Upload & Extraction (10 applications across 3 jobs)
+    // ----------------------------------------------------
+    console.log('\n--- ROUND 21: Real PDF Upload & Extraction Tests ---');
+    const { createClient } = await import('@supabase/supabase-js');
+    const sbClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. Create 3 test jobs
+    const pdfJobIds = [];
+    for (let j = 1; j <= 3; j++) {
+      const jId = `job-pdf-${Date.now()}-${j}`;
+      pdfJobIds.push(jId);
+      cleanupJobIds.push(jId);
+      await sbClient.from('jobs').insert([{
+        id: jId,
+        title: `Operations Specialist Tier ${j}`,
+        description: 'Manage CRM pipelines, Excel reporting, sales operations and customer onboarding.',
+        department: 'Operations',
+        user_id: R1_TENANT,
+        status: 'Active'
+      }]);
+    }
+
+    // 2. Upload real text PDF to Supabase Storage
+    const textPdfBuffer = buildPdfWithText('Sara Ahmed. Senior Operations Specialist with 7 years experience in Salesforce CRM pipelines, advanced Excel spreadsheets, cross-functional logistics, reporting and client communications.');
+    const textPdfPath = `test-resumes/sara_text_${Date.now()}.pdf`;
+    const { error: upErr } = await sbClient.storage.from('resumes').upload(textPdfPath, textPdfBuffer, { contentType: 'application/pdf', upsert: true });
+    report(!upErr, 'Storage: Uploaded real text PDF to Supabase resumes bucket', textPdfPath);
+
+    const { data: textUrlData } = sbClient.storage.from('resumes').getPublicUrl(textPdfPath);
+    const textPdfUrl = textUrlData?.publicUrl;
+
+    // Apply text PDF 10 times across 3 jobs
+    let normalScoreCount = 0;
+    for (let i = 1; i <= 10; i++) {
+      const targetJobId = pdfJobIds[(i - 1) % 3];
+      const candId = `cand-pdf-${Date.now()}-${i}`;
+      cleanupCandidateIds.push(candId);
+
+      const applyRes = await fetch(`${BASE_URL}/api/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: candId,
+          name: `Sara Applicant ${i}`,
+          email: `sara.pdf.${i}.${Date.now()}@example.com`,
+          job_id: targetJobId,
+          resume_url: textPdfUrl,
+          user_id: R1_TENANT
+        })
+      });
+
+      // Screen candidate
+      await new Promise(r => setTimeout(r, 600));
+      const screenRes = await fetch(`${BASE_URL}/api/screen-candidate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${r1Token}`
+        },
+        body: JSON.stringify({
+          candidateId: candId,
+          candidateName: `Sara Applicant ${i}`,
+          jobId: targetJobId,
+          jobTitle: `Operations Specialist Tier ${((i - 1) % 3) + 1}`,
+          jobDescription: 'Manage CRM pipelines, Excel reporting, sales operations and customer onboarding.',
+          resumeUrl: textPdfUrl,
+          userId: R1_TENANT
+        })
+      });
+      const screenData = await screenRes.json();
+      const score = screenData.screening?.score;
+      const engine = screenData.screening?.engine;
+      if (score >= 60 && engine !== 'extraction-fallback') {
+        normalScoreCount++;
+      }
+    }
+    report(normalScoreCount === 10, 'PDF Extraction: Real text PDF applied 10 times across 3 jobs scored normally 10/10', `${normalScoreCount}/10 passed (score >= 60%, engine != extraction-fallback)`);
+
+    // 3. Blank PDF upload & screening (scores 0% Unreadable Resume)
+    const blankPdfBuffer = buildBlankPdf();
+    const blankPdfPath = `test-resumes/blank_${Date.now()}.pdf`;
+    await sbClient.storage.from('resumes').upload(blankPdfPath, blankPdfBuffer, { contentType: 'application/pdf', upsert: true });
+    const { data: blankUrlData } = sbClient.storage.from('resumes').getPublicUrl(blankPdfPath);
+    const blankPdfUrl = blankUrlData?.publicUrl;
+
+    const blankCandId = `cand-blank-pdf-${Date.now()}`;
+    cleanupCandidateIds.push(blankCandId);
+    await fetch(`${BASE_URL}/api/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: blankCandId,
+        name: 'Blank Candidate',
+        email: `blank.${Date.now()}@example.com`,
+        job_id: pdfJobIds[0],
+        resume_url: blankPdfUrl,
+        user_id: R1_TENANT
+      })
+    });
+    await new Promise(r => setTimeout(r, 600));
+    const blankPdfScreenRes = await fetch(`${BASE_URL}/api/screen-candidate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${r1Token}`
       },
       body: JSON.stringify({
-        candidate_name: 'Cancel Test Candidate',
-        job_title: 'Operations Analyst',
-        meeting_format: 'phone',
-        phone_number: '+1-555-0199',
-        date: '2026-11-10',
-        time: '11:00',
-        duration_minutes: 30
+        candidateId: blankCandId,
+        candidateName: 'Blank Candidate',
+        jobId: pdfJobIds[0],
+        jobTitle: 'Operations Specialist',
+        jobDescription: 'Manage CRM pipelines and Excel reporting.',
+        resumeUrl: blankPdfUrl,
+        userId: R1_TENANT
       })
     });
-    const testInterviewData = await testInterviewRes.json();
-    const testEventId = testInterviewData.event?.id;
-    report(testInterviewRes.ok && testEventId, 'Calendar: Test interview created for Cancel & Delete test', `id: ${testEventId}`);
+    const blankPdfScreenData = await blankPdfScreenRes.json();
+    report(blankPdfScreenData.screening?.score === 0 && blankPdfScreenData.screening?.fit_level === 'Unreadable Resume',
+      'Blank PDF: Valid blank PDF with no text scores 0% Unreadable Resume',
+      `score: ${blankPdfScreenData.screening?.score}, fit: ${blankPdfScreenData.screening?.fit_level}`);
 
-    if (testEventId) {
-      // PATCH /api/calendar/events to Cancel
-      const patchRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+    // 4. Real Meet Interview: Cancel reaches Google Calendar & Exactly 1 record created
+    console.log('\n--- Testing Real Google Meet Interview, Cancel Sync & Duplicate Prevention ---');
+    const meetInterviewRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${r1Token}`
+      },
+      body: JSON.stringify({
+        candidate_name: 'Meet Sync Candidate',
+        candidate_id: `cand-meet-${Date.now()}`,
+        job_title: 'Operations Manager',
+        meeting_format: 'google_meet',
+        date: '2026-11-12',
+        time: '14:00',
+        duration_minutes: 45
+      })
+    });
+    const meetData = await meetInterviewRes.json();
+    const meetEvent = meetData.event;
+    const meetEventId = meetEvent?.id;
+    const hasMeetLink = meetEvent?.meeting_link && meetEvent.meeting_link.includes('meet.google.com');
+    report(meetInterviewRes.ok && hasMeetLink, 'Calendar: Created Google Meet interview with real meet.google.com link', meetEvent?.meeting_link);
+
+    // Duplicate check: GET /api/calendar/events must return exactly 1 record for this candidate
+    const listRes = await fetch(`${BASE_URL}/api/calendar/events`, {
+      headers: { 'Authorization': `Bearer ${r1Token}` }
+    });
+    const listData = await listRes.json();
+    const candidateInterviews = (listData.events || []).filter(e =>
+      e.id === meetEventId ||
+      e.candidate_name?.includes('Meet Sync Candidate') ||
+      (e.date === '2026-11-12' && e.time === '14:00')
+    );
+    report(candidateInterviews.length === 1, 'Duplicate Prevention: Scheduling Google Meet creates exactly 1 record (no duplicate phone/placeholder)', `found: ${candidateInterviews.length}`);
+
+    // Cancel test: PATCH status Cancelled deletes the event on Google Calendar
+    if (meetEventId) {
+      const cancelRes = await fetch(`${BASE_URL}/api/calendar/events`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${r1Token}`
         },
-        body: JSON.stringify({ id: testEventId, status: 'Cancelled' })
+        body: JSON.stringify({ id: meetEventId, google_event_id: meetEventId, status: 'Cancelled' })
       });
-      const patchData = await patchRes.json();
-      report(patchRes.ok && patchData.event?.status === 'Cancelled', 'Calendar: PATCH /api/calendar/events cancels session', `status: ${patchData.event?.status}`);
+      report(cancelRes.ok, 'Calendar: PATCH status Cancelled returned 200');
 
-      // DELETE /api/calendar/events
-      const delRes = await fetch(`${BASE_URL}/api/calendar/events?id=${encodeURIComponent(testEventId)}`, {
+      // Verify on Google Calendar directly via Nango token
+      let googleCancelled = false;
+      try {
+        const nangoKey = process.env.NANGO_SECRET_KEY || '8fd2eccd-4850-4080-ae7f-f48cc3e317af';
+        const gInt = r1IntData.integrations?.find(i => i.provider === 'google');
+        if (gInt?.connection_id) {
+          const detailRes = await fetch(`https://api.nango.dev/connection/${gInt.connection_id}?provider_config_key=google-calendar`, {
+            headers: { 'Authorization': `Bearer ${nangoKey}` }
+          });
+          const detailData = await detailRes.json();
+          const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
+          if (accessToken) {
+            const gCheckRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(meetEventId)}`, {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const gCheckData = await gCheckRes.json().catch(() => ({}));
+            // Event is deleted on Google Calendar: either returns 404/410, or status 'cancelled'
+            googleCancelled = gCheckRes.status === 404 || gCheckRes.status === 410 || gCheckData.status === 'cancelled';
+          }
+        }
+      } catch (gErr) {
+        console.warn('Google check error:', gErr.message);
+      }
+      report(googleCancelled, 'Calendar Cancel: Google Calendar event was deleted on Google Calendar (returns 404/410 or status "cancelled")');
+
+      // Delete test: DELETE removes the interview session
+      const deleteRes = await fetch(`${BASE_URL}/api/calendar/events?id=${encodeURIComponent(meetEventId)}&google_event_id=${encodeURIComponent(meetEventId)}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${r1Token}` }
       });
-      const delData = await delRes.json();
-      report(delRes.ok && delData.success, 'Calendar: DELETE /api/calendar/events deletes session', `id: ${delData.id}`);
+      report(deleteRes.ok, 'Calendar Delete: DELETE /api/calendar/events returned 200');
+
+      // Verify 0 remain
+      const listAfterDelete = await fetch(`${BASE_URL}/api/calendar/events`, {
+        headers: { 'Authorization': `Bearer ${r1Token}` }
+      });
+      const listAfterDeleteData = await listAfterDelete.json();
+      const remaining = (listAfterDeleteData.events || []).filter(e =>
+        e.id === meetEventId ||
+        e.candidate_name?.includes('Meet Sync Candidate') ||
+        (e.date === '2026-11-12' && e.time === '14:00')
+      );
+      report(remaining.length === 0, 'Duplicate Prevention: Deleting the interview leaves 0 records remaining', `remaining: ${remaining.length}`);
     }
 
     // 6. Security Headers check (on BASE_URL or root)
