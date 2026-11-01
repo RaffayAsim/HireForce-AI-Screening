@@ -34,7 +34,8 @@ import {
   Check,
   Sparkles,
   Globe,
-  Copy
+  Copy,
+  Trash2
 } from 'lucide-react';
 import {
   getInterviews,
@@ -132,6 +133,58 @@ const InterviewCalendar = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [notes, setNotes] = useState('');
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  const handleCancelSession = async () => {
+    if (!selectedInterview) return;
+    setIsProcessingAction(true);
+    try {
+      const res = await apiFetch('/api/calendar/events', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: selectedInterview.id, status: 'Cancelled' }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        showError(errJson.error || 'Failed to cancel interview');
+        setIsProcessingAction(false);
+        return;
+      }
+      updateInterviewStatus(selectedInterview.id, 'Cancelled', user?.id);
+      setSelectedInterview(null);
+      showSuccess('Interview Cancelled');
+      loadInterviews();
+    } catch (e: any) {
+      showError(e?.message || 'Failed to cancel interview');
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleDeleteSession = async () => {
+    if (!selectedInterview) return;
+    if (!window.confirm('Are you sure you want to delete this interview session?')) return;
+    setIsProcessingAction(true);
+    try {
+      const res = await apiFetch(`/api/calendar/events?id=${encodeURIComponent(selectedInterview.id)}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ id: selectedInterview.id }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        showError(errJson.error || 'Failed to delete interview');
+        setIsProcessingAction(false);
+        return;
+      }
+      deleteInterview(selectedInterview.id, user?.id);
+      setSelectedInterview(null);
+      showSuccess('Interview deleted successfully');
+      loadInterviews();
+    } catch (e: any) {
+      showError(e?.message || 'Failed to delete interview');
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
 
   const loadInterviews = async () => {
     // Delete legacy unscoped key on load (FIX 1)
@@ -1033,32 +1086,41 @@ const InterviewCalendar = () => {
                 )}
 
                 {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100">
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-100">
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={isProcessingAction}
                     onClick={() => {
-                      updateInterviewStatus(selectedInterview.id, 'Completed');
+                      updateInterviewStatus(selectedInterview.id, 'Completed', user?.id);
                       setSelectedInterview(null);
                       showSuccess('Marked as Completed');
+                      loadInterviews();
                     }}
                     className="h-8 text-xs font-semibold"
                   >
                     <CheckCircle2 size={13} className="text-emerald-600 mr-1" />
-                    Mark Completed
+                    Complete
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      updateInterviewStatus(selectedInterview.id, 'Cancelled');
-                      setSelectedInterview(null);
-                      showSuccess('Interview Cancelled');
-                    }}
+                    disabled={isProcessingAction}
+                    onClick={handleCancelSession}
+                    className="h-8 text-xs font-semibold text-amber-600 hover:bg-amber-50"
+                  >
+                    <XCircle size={13} className="text-amber-600 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isProcessingAction}
+                    onClick={handleDeleteSession}
                     className="h-8 text-xs font-semibold text-red-600 hover:bg-red-50"
                   >
-                    <XCircle size={13} className="text-red-600 mr-1" />
-                    Cancel Session
+                    <Trash2 size={13} className="text-red-600 mr-1" />
+                    Delete
                   </Button>
                 </div>
               </div>

@@ -68,6 +68,25 @@ export default async function handler(req: any, res: any) {
     const key = getNangoKey();
 
     if (!key) {
+      const savedInts = await getIntegrations(effectiveTenantId);
+      if (savedInts.length > 0) {
+        const matchingInt = requestedProvider
+          ? savedInts.find(i => i.provider === requestedProvider || (requestedProvider.includes(i.provider)) || (i.provider.includes(requestedProvider)))
+          : savedInts[0];
+        if (matchingInt) {
+          return res.status(200).json({
+            connected: true,
+            email: matchingInt.account_email,
+            recruiterName: matchingInt.account_email.split("@")[0],
+            provider: matchingInt.provider,
+            connectionId: matchingInt.connection_id,
+            emailConnected: savedInts.some(i => i.service === "mail"),
+            calendarConnected: savedInts.some(i => i.service === "calendar"),
+            hasMailConnection: savedInts.some(i => i.service === "mail"),
+            hasCalendarConnection: savedInts.some(i => i.service === "calendar"),
+          });
+        }
+      }
       return res.status(200).json({ connected: false, message: "No Nango key configured" });
     }
 
@@ -89,7 +108,7 @@ export default async function handler(req: any, res: any) {
     if (connections.length === 0) {
       if (savedInts.length > 0) {
         const matchingInt = requestedProvider
-          ? savedInts.find(i => i.provider === requestedProvider || (requestedProvider.includes(i.provider)))
+          ? savedInts.find(i => i.provider === requestedProvider || (requestedProvider.includes(i.provider)) || (i.provider.includes(requestedProvider)))
           : savedInts[0];
         if (matchingInt) {
           return res.status(200).json({
@@ -116,10 +135,33 @@ export default async function handler(req: any, res: any) {
     );
 
     const targetConn = requestedProvider
-      ? connections.find((c: any) => c.provider_config_key === requestedProvider || c.provider === requestedProvider)
+      ? connections.find((c: any) => 
+          c.provider_config_key === requestedProvider || 
+          c.provider === requestedProvider ||
+          (c.provider_config_key && c.provider_config_key.includes(requestedProvider)) ||
+          (c.provider && c.provider.includes(requestedProvider))
+        )
       : (mailConn || calConn || connections[0]);
 
     if (!targetConn) {
+      if (savedInts.length > 0) {
+        const matchingInt = requestedProvider
+          ? savedInts.find(i => i.provider === requestedProvider || (requestedProvider.includes(i.provider)) || (i.provider.includes(requestedProvider)))
+          : savedInts[0];
+        if (matchingInt) {
+          return res.status(200).json({
+            connected: true,
+            email: matchingInt.account_email,
+            recruiterName: matchingInt.account_email.split("@")[0],
+            provider: matchingInt.provider,
+            connectionId: matchingInt.connection_id,
+            emailConnected: savedInts.some(i => i.service === "mail"),
+            calendarConnected: savedInts.some(i => i.service === "calendar"),
+            hasMailConnection: savedInts.some(i => i.service === "mail"),
+            hasCalendarConnection: savedInts.some(i => i.service === "calendar"),
+          });
+        }
+      }
       return res.status(200).json({ connected: false });
     }
 

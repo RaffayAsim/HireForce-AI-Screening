@@ -4,7 +4,7 @@ import { getIntegration } from "../_lib/integrations.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Content-Type", "application/json");
 
@@ -371,6 +371,91 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ success: true, event: createdEventObj });
     } catch (err: any) {
       return res.status(200).json({ success: false, error: err.message });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    try {
+      const data = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      const { id, status = "Cancelled" } = data;
+      if (!id) {
+        return res.status(400).json({ success: false, error: "Interview ID is required" });
+      }
+
+      // If connected to Google Calendar, attempt to update or cancel remote event
+      const calInt = await getIntegration(effectiveTenantId, "google", "calendar");
+      if (calInt) {
+        const key = getNangoKey();
+        if (key) {
+          try {
+            const detailResp = await fetch(`https://api.nango.dev/connection/${calInt.connection_id}?provider_config_key=google-calendar`, {
+              headers: { "Authorization": `Bearer ${key}` }
+            });
+            const detailData = await detailResp.json();
+            const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
+            if (accessToken) {
+              await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${id}`, {
+                method: "PATCH",
+                headers: {
+                  "Authorization": `Bearer ${accessToken}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  status: "cancelled",
+                  summary: `[Cancelled] Interview`
+                })
+              }).catch(() => {});
+            }
+          } catch {}
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        event: { id, status },
+        message: "Interview session status updated successfully"
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message || "Failed to update interview" });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    try {
+      const data = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      const id = req.query?.id || data?.id;
+      if (!id) {
+        return res.status(400).json({ success: false, error: "Interview ID is required" });
+      }
+
+      // If connected to Google Calendar, delete remote event
+      const calInt = await getIntegration(effectiveTenantId, "google", "calendar");
+      if (calInt) {
+        const key = getNangoKey();
+        if (key) {
+          try {
+            const detailResp = await fetch(`https://api.nango.dev/connection/${calInt.connection_id}?provider_config_key=google-calendar`, {
+              headers: { "Authorization": `Bearer ${key}` }
+            });
+            const detailData = await detailResp.json();
+            const accessToken = detailData?.credentials?.access_token || detailData?.credentials?.raw?.access_token;
+            if (accessToken) {
+              await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${accessToken}` }
+              }).catch(() => {});
+            }
+          } catch {}
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        id,
+        message: "Interview session deleted successfully"
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message || "Failed to delete interview" });
     }
   }
 

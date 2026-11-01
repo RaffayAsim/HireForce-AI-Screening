@@ -62,6 +62,36 @@ const Organization = () => {
         const data = await res.json();
         if (Array.isArray(data.integrations)) {
           setServerIntegrations(data.integrations);
+          if (data.integrations.length > 0 && (!connectedAcc || connectedAcc.status !== 'active')) {
+            const calInt = data.integrations.find((i: any) => i.service === 'calendar') || data.integrations[0];
+            const mailInt = data.integrations.find((i: any) => i.service === 'mail' || i.service === 'email') || data.integrations[0];
+            const accEmail = calInt.account_email || mailInt.account_email || user?.email || 'recruiter@hireforce.ai';
+            const prov = (calInt.provider || mailInt.provider || 'google') as any;
+            const newAcc: ConnectedRecruiterAccount = {
+              id: calInt.connection_id || mailInt.connection_id || 'server-conn',
+              user_id: user?.id,
+              recruiter_name: (accEmail.split('@')[0]) || 'Recruiter',
+              email: accEmail,
+              provider: prov,
+              connected_at: calInt.created_at || new Date().toISOString(),
+              status: 'active',
+              email_sync: {
+                enabled: true,
+                provider: prov,
+                smtp_host: '',
+                smtp_port: 587,
+                use_ssl: true,
+              },
+              calendar_sync: {
+                enabled: true,
+                provider: prov,
+                default_format: prov === 'microsoft' ? 'teams' : 'google_meet',
+                calendar_name: prov === 'google' ? 'Google Calendar (Primary)' : 'Primary Calendar',
+              }
+            };
+            saveConnectedAccount(newAcc, user?.id);
+            setConnectedAcc(newAcc);
+          }
         }
       }
     } catch {}
@@ -193,7 +223,7 @@ const Organization = () => {
     }
   };
 
-  const emailActive = serverIntegrations.some(i => i.service === 'mail') || isEmailConnected(user?.id);
+  const emailActive = serverIntegrations.some(i => i.service === 'mail' || i.service === 'email') || isEmailConnected(user?.id);
   const calendarActive = serverIntegrations.some(i => i.service === 'calendar') || isCalendarConnected(user?.id);
   const videoActive = serverIntegrations.some(i => i.service === 'meeting' || i.service === 'calendar') || isVideoMeetingConnected(user?.id);
 
@@ -510,14 +540,14 @@ const Organization = () => {
                         type="button"
                         onClick={() => handleToggleMeetingFormat('google_meet')}
                         className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                          connectedAcc?.calendar_sync?.default_format !== 'teams'
+                          displayAccount?.calendar_sync?.default_format !== 'teams'
                             ? 'border-emerald-600 bg-emerald-50/80 text-emerald-900 ring-1 ring-emerald-600/20'
                             : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-bold text-xs text-emerald-600">Google Meet</span>
-                          {connectedAcc?.calendar_sync?.default_format !== 'teams' && (
+                          {displayAccount?.calendar_sync?.default_format !== 'teams' && (
                             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
                           )}
                         </div>
@@ -528,14 +558,14 @@ const Organization = () => {
                         type="button"
                         onClick={() => handleToggleMeetingFormat('teams')}
                         className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                          connectedAcc?.calendar_sync?.default_format === 'teams'
+                          displayAccount?.calendar_sync?.default_format === 'teams'
                             ? 'border-indigo-600 bg-indigo-50/80 text-indigo-900 ring-1 ring-indigo-600/20'
                             : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-bold text-xs text-indigo-600">Microsoft Teams</span>
-                          {connectedAcc?.calendar_sync?.default_format === 'teams' && (
+                          {displayAccount?.calendar_sync?.default_format === 'teams' && (
                             <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
                           )}
                         </div>
@@ -548,17 +578,17 @@ const Organization = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-500">Active Room Format:</span>
                       <span className="font-bold text-zinc-900">
-                        {connectedAcc?.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet'}
+                        {displayAccount?.calendar_sync?.default_format === 'teams' ? 'Microsoft Teams' : 'Google Meet'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-500">Provider:</span>
                       <span className={`font-mono text-[11px] font-semibold px-1.5 py-0.5 rounded border ${
-                        connectedAcc?.calendar_sync?.default_format === 'teams'
+                        displayAccount?.calendar_sync?.default_format === 'teams'
                           ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
                           : 'text-emerald-700 bg-emerald-50 border-emerald-200'
                       }`}>
-                        {connectedAcc?.calendar_sync?.default_format === 'teams' ? 'microsoft-teams' : 'google-meet'}
+                        {displayAccount?.calendar_sync?.default_format === 'teams' ? 'microsoft-teams' : 'google-meet'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -568,12 +598,12 @@ const Organization = () => {
                   </div>
 
                   <div className={`flex items-center gap-2 text-[11px] p-2.5 rounded border ${
-                    connectedAcc?.calendar_sync?.default_format === 'teams'
+                    displayAccount?.calendar_sync?.default_format === 'teams'
                       ? 'text-indigo-700 bg-indigo-50/70 border-indigo-200/70'
                       : 'text-emerald-700 bg-emerald-50/70 border-emerald-200/70'
                   }`}>
                     <ShieldCheck size={14} className={`shrink-0 ${
-                      connectedAcc?.calendar_sync?.default_format === 'teams' ? 'text-indigo-600' : 'text-emerald-600'
+                      displayAccount?.calendar_sync?.default_format === 'teams' ? 'text-indigo-600' : 'text-emerald-600'
                     }`} />
                     <span>Interview invites automatically include your chosen video room link.</span>
                   </div>

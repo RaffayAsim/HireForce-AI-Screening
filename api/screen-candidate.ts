@@ -85,34 +85,75 @@ export async function evaluateCandidate(data: any) {
       resumeText.includes("HeadlessChrome") || 
       resumeText.includes("PDF container");
 
+    let pdfExtractionFailed = false;
     if (isGarbageText && resumeUrl && (resumeUrl.startsWith("http://") || resumeUrl.startsWith("https://"))) {
-      try {
-        const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), 3500);
-        const fetchPdf = await fetch(resumeUrl, { signal: controller.signal });
-        clearTimeout(fetchTimeout);
-        if (fetchPdf.ok) {
-          const arrayBuf = await fetchPdf.arrayBuffer();
-          const extracted = await extractTextFromPdf(new Uint8Array(arrayBuf));
-          if (extracted && extracted.length > 15) {
-            resumeText = extracted;
+      let extractedSuccess = false;
+      // Retry once if extraction fails or times out
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const controller = new AbortController();
+          const fetchTimeout = setTimeout(() => controller.abort(), 4000);
+          const fetchPdf = await fetch(resumeUrl, { signal: controller.signal });
+          clearTimeout(fetchTimeout);
+          if (fetchPdf.ok) {
+            const arrayBuf = await fetchPdf.arrayBuffer();
+            const extracted = await extractTextFromPdf(new Uint8Array(arrayBuf));
+            if (extracted && extracted.trim().length > 15) {
+              resumeText = extracted;
+              extractedSuccess = true;
+              break;
+            }
           }
+        } catch (err) {
+          console.warn(`Could not extract PDF text from URL (attempt ${attempt + 1}):`, err);
         }
-      } catch (err) {
-        console.warn("Could not extract PDF text from URL:", err);
+      }
+      if (!extractedSuccess) {
+        pdfExtractionFailed = true;
       }
     }
 
+    // If PDF extraction failed after retrying, mark "Needs Review", NEVER 0%
+    if (pdfExtractionFailed) {
+      const reviewResult = {
+        score: 45,
+        fit_level: "Needs Review",
+        skills_matched: [],
+        strengths: ["Profile submitted for automated screening; document requires manual reviewer inspection."],
+        interview_topics: ["Verify candidate qualifications and core experience directly from profile."],
+        summary: "Document Extraction Failed:\nThe resume document could not be downloaded or parsed. Manual profile review is recommended.\n\nRecommendation: Needs Review. Please inspect resume manually.\n\n[Engine: extraction-fallback]",
+        recommendation: "Review Profile",
+        engine: "extraction-fallback"
+      };
+
+      if (candidateId && sb) {
+        try {
+          await sb.from("candidates").update({
+            screening_score: 45,
+            screening_summary: reviewResult.summary,
+          }).eq("id", candidateId);
+        } catch {}
+      }
+
+      return {
+        success: true,
+        provider: "extraction-fallback",
+        screening: reviewResult,
+        screened_at: new Date().toISOString()
+      };
+    }
+
     // 3. Guard: Unreadable, blank, or non-resume PDF check
+    // The guard must ONLY fire when the extracted text is truly empty or under ~50 meaningful characters after extraction.
     const cleanText = (resumeText || "").trim();
-    const alphaWords = cleanText.replace(/[^a-zA-Z\s]/g, " ").trim().split(/\s+/).filter(w => w.length > 2);
-    const isUnreadable = !cleanText || 
-      cleanText.length < 35 || 
-      alphaWords.length < 6 ||
+    const meaningfulText = cleanText.replace(/[^a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+    const alphaWords = meaningfulText.split(/\s+/).filter(w => w.length > 2);
+    const isUnreadable = !meaningfulText || 
+      meaningfulText.length < 50 || 
+      alphaWords.length < 5 ||
       cleanText.toLowerCase() === "sample resume" ||
       cleanText.toLowerCase().includes("blank page") ||
-      cleanText.toLowerCase().includes("no text found") ||
-      (cleanText.includes("%PDF") && alphaWords.length < 15);
+      cleanText.toLowerCase().includes("no text found");
 
     if (isUnreadable) {
       const unreadableResult = {

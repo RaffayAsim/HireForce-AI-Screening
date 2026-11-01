@@ -1,8 +1,105 @@
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createSessionToken, verifyAuth, hashPassword, verifyPassword } from "../_lib/auth.js";
 
-// Rate limiting in-memory map: key -> { count, firstAttempt }
-const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+// Database-backed rate limiting helpers (stores in login_attempts or sys_rate_limit)
+async function getFailedAttempts(sb: any, key: string, windowMs = 15 * 60 * 1000): Promise<number> {
+  if (!sb) return 0;
+  const now = Date.now();
+  // 1. Try login_attempts table if exists
+  try {
+    const { data, error } = await sb.from("login_attempts").select("*").eq("key", key).maybeSingle();
+    if (!error && data) {
+      if (now - Number(data.window_start) < windowMs) {
+        return Number(data.count) || 0;
+      }
+      return 0;
+    }
+  } catch {}
+
+  // 2. Fallback to candidates table (isolated under user_id: 'sys_rate_limit')
+  try {
+    const recordId = `rl-${crypto.createHash("md5").update(key).digest("hex")}`;
+    const { data, error } = await sb.from("candidates").select("*").eq("id", recordId).eq("user_id", "sys_rate_limit").maybeSingle();
+    if (!error && data && data.screening_summary) {
+      try {
+        const parsed = JSON.parse(data.screening_summary);
+        if (now - Number(parsed.window_start) < windowMs) {
+          return Number(parsed.count) || 0;
+        }
+      } catch {}
+    }
+  } catch {}
+
+  return 0;
+}
+
+async function recordFailedAttempt(sb: any, key: string, windowMs = 15 * 60 * 1000): Promise<number> {
+  if (!sb) return 1;
+  const now = Date.now();
+  // 1. Try login_attempts table
+  try {
+    const { data } = await sb.from("login_attempts").select("*").eq("key", key).maybeSingle();
+    if (data) {
+      let count = 1;
+      let windowStart = now;
+      if (now - Number(data.window_start) < windowMs) {
+        count = (Number(data.count) || 0) + 1;
+        windowStart = Number(data.window_start);
+      }
+      await sb.from("login_attempts").update({ count, window_start: windowStart }).eq("key", key);
+      return count;
+    } else {
+      const { error } = await sb.from("login_attempts").insert({ key, count: 1, window_start: now });
+      if (!error) return 1;
+    }
+  } catch {}
+
+  // 2. Fallback to candidates table
+  try {
+    const recordId = `rl-${crypto.createHash("md5").update(key).digest("hex")}`;
+    const { data } = await sb.from("candidates").select("*").eq("id", recordId).eq("user_id", "sys_rate_limit").maybeSingle();
+    let count = 1;
+    let windowStart = now;
+    if (data && data.screening_summary) {
+      try {
+        const parsed = JSON.parse(data.screening_summary);
+        if (now - Number(parsed.window_start) < windowMs) {
+          count = (Number(parsed.count) || 0) + 1;
+          windowStart = Number(parsed.window_start);
+        }
+      } catch {}
+      await sb.from("candidates").update({
+        screening_score: count,
+        screening_summary: JSON.stringify({ count, window_start: windowStart })
+      }).eq("id", recordId);
+      return count;
+    } else {
+      await sb.from("candidates").insert({
+        id: recordId,
+        full_name: "Rate Limit Guard",
+        email: "rl@system.local",
+        user_id: "sys_rate_limit",
+        screening_score: 1,
+        screening_summary: JSON.stringify({ count: 1, window_start: now })
+      });
+      return 1;
+    }
+  } catch {}
+
+  return 1;
+}
+
+async function clearFailedAttempts(sb: any, key: string): Promise<void> {
+  if (!sb) return;
+  try {
+    await sb.from("login_attempts").delete().eq("key", key);
+  } catch {}
+  try {
+    const recordId = `rl-${crypto.createHash("md5").update(key).digest("hex")}`;
+    await sb.from("candidates").delete().eq("id", recordId).eq("user_id", "sys_rate_limit");
+  } catch {}
+}
 
 const SEED_RECRUITERS = [
   {
@@ -98,22 +195,15 @@ export default async function handler(req: any, res: any) {
 
     const normalizedEmail = String(email).trim().toLowerCase();
 
-    // Rate limiting: 10 attempts per 15 min per IP / email
-    const ip = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "ip";
-    const rateKey = `${ip}_${normalizedEmail}`;
-    const now = Date.now();
-    const rateInfo = loginAttempts.get(rateKey);
+    // Database-backed rate limiting: 10 failed attempts per 15 min per IP and per email
+    const rawIp = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "ip").split(",")[0].trim();
+    const ipKey = `ip_${rawIp}`;
+    const emailKey = `email_${normalizedEmail}`;
 
-    if (rateInfo) {
-      if (now - rateInfo.firstAttempt < 15 * 60 * 1000) {
-        if (rateInfo.count >= 10) {
-          return res.status(429).json({ success: false, error: "Too many login attempts. Please try again in 15 minutes." });
-        }
-      } else {
-        loginAttempts.set(rateKey, { count: 0, firstAttempt: now });
-      }
-    } else {
-      loginAttempts.set(rateKey, { count: 0, firstAttempt: now });
+    const ipAttempts = await getFailedAttempts(sb, ipKey);
+    const emailAttempts = await getFailedAttempts(sb, emailKey);
+    if (ipAttempts >= 10 || emailAttempts >= 10) {
+      return res.status(429).json({ success: false, error: "Too many login attempts. Please try again in 15 minutes." });
     }
 
     try {
@@ -130,7 +220,6 @@ export default async function handler(req: any, res: any) {
       const seed = SEED_RECRUITERS.find(s => s.email === normalizedEmail);
       if (!recruiter && seed) {
         recruiter = {
-          id: seed.tenant_id,
           email: seed.email,
           password_hash: seed.password_hash,
           tenant_id: seed.tenant_id,
@@ -143,8 +232,8 @@ export default async function handler(req: any, res: any) {
       }
 
       if (!recruiter) {
-        const rInfo = loginAttempts.get(rateKey);
-        if (rInfo) rInfo.count++;
+        await recordFailedAttempt(sb, ipKey);
+        await recordFailedAttempt(sb, emailKey);
         return res.status(401).json({ success: false, error: "Invalid email or password" });
       }
 
@@ -152,8 +241,8 @@ export default async function handler(req: any, res: any) {
       if (recruiter.password_hash) {
         const isValid = verifyPassword(password, recruiter.password_hash);
         if (!isValid) {
-          const rInfo = loginAttempts.get(rateKey);
-          if (rInfo) rInfo.count++;
+          await recordFailedAttempt(sb, ipKey);
+          await recordFailedAttempt(sb, emailKey);
           return res.status(401).json({ success: false, error: "Invalid email or password" });
         }
       } else {
@@ -166,7 +255,7 @@ export default async function handler(req: any, res: any) {
       }
 
       // Reset failed attempts on success
-      loginAttempts.delete(rateKey);
+      await clearFailedAttempts(sb, emailKey);
 
       // Issue signed server token
       const tenantId = recruiter.tenant_id || recruiter.id;
@@ -206,17 +295,16 @@ export default async function handler(req: any, res: any) {
     const normalizedEmail = String(email).trim().toLowerCase();
 
     try {
-      try {
+      if (sb) {
         const { data: existing } = await sb.from("recruiters").select("id").eq("email", normalizedEmail).maybeSingle();
         if (existing) {
           return res.status(409).json({ success: false, error: "An account with this email already exists" });
         }
-      } catch {}
+      }
 
       const newTenantId = `tenant-${Date.now()}`;
       const hash = hashPassword(password);
       const newRecruiter = {
-        id: newTenantId,
         email: normalizedEmail,
         password_hash: hash,
         tenant_id: newTenantId,
@@ -224,10 +312,15 @@ export default async function handler(req: any, res: any) {
         company: company ? String(company).trim() : "Hiring Workspace",
       };
 
-      try {
-        await sb.from("recruiters").insert(newRecruiter);
-      } catch (insErr) {
-        console.warn("DB insert recruiter error:", insErr);
+      if (sb) {
+        const { error: insErr } = await sb.from("recruiters").insert(newRecruiter);
+        if (insErr) {
+          if (insErr.code === "23505") { // unique constraint violation
+            return res.status(409).json({ success: false, error: "An account with this email already exists" });
+          }
+          console.error("DB insert recruiter error:", insErr);
+          return res.status(500).json({ success: false, error: "Failed to create recruiter account" });
+        }
       }
 
       const token = createSessionToken(newTenantId, 12);

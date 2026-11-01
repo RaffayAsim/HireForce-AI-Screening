@@ -165,26 +165,28 @@ export const saveInterviewAsync = async (interview: Omit<Interview, 'id'>, userI
 };
 
 export const updateInterviewStatus = (id: string, status: Interview['status'], userId?: string) => {
-  if (!userId) return;
-  const interviews = getInterviews(userId);
+  const targetUserId = userId || getCurrentAuthUserId() || undefined;
+  if (!targetUserId) return;
+  const interviews = getInterviews(targetUserId);
   const updated = interviews.map(i => i.id === id ? { ...i, status } : i);
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.setItem(`hireforce_local_interviews_${userId}`, JSON.stringify(updated));
+      localStorage.setItem(`hireforce_local_interviews_${targetUserId}`, JSON.stringify(updated));
     } catch { }
   }
   window.dispatchEvent(new Event('local_interviews_updated'));
 };
 
 export const deleteInterview = (id: string, userId?: string) => {
-  if (!userId) return;
-  const interviews = getInterviews(userId);
+  const targetUserId = userId || getCurrentAuthUserId() || undefined;
+  if (!targetUserId) return;
+  const interviews = getInterviews(targetUserId);
   const updated = interviews.filter(i => i.id !== id);
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.setItem(`hireforce_local_interviews_${userId}`, JSON.stringify(updated));
+      localStorage.setItem(`hireforce_local_interviews_${targetUserId}`, JSON.stringify(updated));
     } catch { }
   }
   window.dispatchEvent(new Event('local_interviews_updated'));
