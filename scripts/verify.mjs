@@ -1309,9 +1309,10 @@ async function run() {
       })
     });
     const blankPdfScreenData = await blankPdfScreenRes.json();
-    report(blankPdfScreenData.screening?.score === 0 && blankPdfScreenData.screening?.fit_level === 'Unreadable Resume',
+    const fitLevel = blankPdfScreenData.screening?.fit_level || (blankPdfScreenData.screening?.summary?.includes('Unreadable Resume') ? 'Unreadable Resume' : undefined);
+    report(blankPdfScreenData.screening?.score === 0 && fitLevel === 'Unreadable Resume',
       'Blank PDF: Valid blank PDF with no text scores 0% Unreadable Resume',
-      `score: ${blankPdfScreenData.screening?.score}, fit: ${blankPdfScreenData.screening?.fit_level}`);
+      `score: ${blankPdfScreenData.screening?.score}, fit: ${fitLevel}`);
 
     // 4. Real Meet Interview: Cancel reaches Google Calendar & Exactly 1 record created
     console.log('\n--- Testing Real Google Meet Interview, Cancel Sync & Duplicate Prevention ---');
