@@ -54,6 +54,7 @@ export async function evaluateCandidate(data: any) {
   }
 
   // 1. Return already saved score if candidate was previously screened (reproducible, idempotent)
+  const isForce = Boolean(data.force || data.reScreen || data.rescreen);
   if (candidateId) {
     try {
       const { data: existingCand } = await sb
@@ -69,7 +70,7 @@ export async function evaluateCandidate(data: any) {
         }
       }
 
-      if (existingCand && existingCand.screening_score !== null && existingCand.screening_score !== undefined && existingCand.screening_summary) {
+      if (!isForce && existingCand && existingCand.screening_score !== null && existingCand.screening_score !== undefined && existingCand.screening_summary) {
         return {
           success: true,
           provider: "persisted-record",
@@ -227,22 +228,32 @@ export async function evaluateCandidate(data: any) {
     const candName = candidateName || "Candidate";
     const resumeLower = cleanText.toLowerCase();
     const jobLower = `${jobTitle || ''} ${jobDescription || ''}`.toLowerCase();
+    const titleLower = cleanRole.toLowerCase();
 
-    // Check whether target job is an actual automation engineering role (FIX 2)
-    // Only flag if title/desc explicitly requires automation engineering:
-    // (n8n, vapi, workflow automation, ai automation, automation engineer)
-    const isAutomationRole = 
-      jobLower.includes("n8n") || 
-      jobLower.includes("vapi") || 
-      jobLower.includes("workflow automation") || 
-      jobLower.includes("ai automation") ||
-      jobLower.includes("automation engineer");
+    // Explicit non-technical roles: NEVER treat as software/automation engineering even if job description mentions AI, automations, or technical tools
+    const isSalesRole = /\b(sales|cold\s*call|calling|account\s*executive|closer|sdr|bdr|outbound|telemarketing|business\s*development|inside\s*sales)\b/i.test(titleLower);
+    const isMarketingRole = /\b(marketing|social\s*media|content|copywriter|growth|brand|seo|sem|community)\b/i.test(titleLower);
+    const isSupportOrOpsRole = /\b(customer\s*support|customer\s*service|client\s*success|virtual\s*assistant|receptionist|office\s*manager|admin|operations\s*coordinator|sales\s*operations)\b/i.test(titleLower);
+    const isHrRole = /\b(recruiter|talent|hr|human\s*resources|people\s*ops)\b/i.test(titleLower);
+    const isExplicitNonTechRole = isSalesRole || isMarketingRole || isSupportOrOpsRole || isHrRole;
+
+    // Check whether target job is an actual automation engineering role:
+    // MUST be a developer/engineer/architect role in title or explicitly hiring a technical engineer
+    const isAutomationRole = !isExplicitNonTechRole && (
+      /\b(automation\s*engineer|automation\s*developer|ai\s*automation\s*engineer|ai\s*automation\s*developer|workflow\s*engineer|workflow\s*developer|n8n\s*developer|n8n\s*engineer)\b/i.test(titleLower) ||
+      (/\b(developer|engineer|architect|programmer)\b/i.test(titleLower) && (
+        jobLower.includes("n8n") || jobLower.includes("vapi") || jobLower.includes("workflow automation") || jobLower.includes("ai automation")
+      ))
+    );
 
     // Check whether target job is data science / machine learning
-    const isDataScienceRole = !isAutomationRole && (
-      jobLower.includes("data scientist") || 
-      jobLower.includes("machine learning") || 
-      jobLower.includes("data science")
+    const isDataScienceRole = !isExplicitNonTechRole && !isAutomationRole && (
+      /\b(data\s*scientist|machine\s*learning|ml\s*engineer|deep\s*learning|ai\s*researcher)\b/i.test(titleLower)
+    );
+
+    const isTechRole = !isExplicitNonTechRole && (
+      isAutomationRole || isDataScienceRole ||
+      /\b(developer|software|engineer|frontend|backend|full\s*stack|devops|architect|programmer|qa\s*engineer|sre)\b/i.test(titleLower)
     );
 
     // Categorize candidate detected tools
@@ -260,23 +271,50 @@ export async function evaluateCandidate(data: any) {
 
     const allDetected = Array.from(new Set([...automationTools, ...dataScienceTools, ...webDevTools]));
 
-    // Comprehensive skills pool for dynamically matching non-automation jobs (FIX 2)
+    // Comprehensive skills pool for dynamically matching across all business, sales, ops & tech roles
     const knownSkills = [
-      "hubspot", "salesforce", "marketo", "marketing automation", "google analytics", "ga4", "crm", "zapier",
-      "segment", "email marketing", "lead generation", "seo", "sem", "campaign management", "excel", "spreadsheets",
-      "reporting", "dashboard", "sql", "python", "tableau", "power bi", "looker", "pandas", "numpy",
-      "statistics", "data analysis", "data modeling", "etl", "machine learning", "deep learning", "pytorch",
-      "tensorflow", "scikit-learn", "react", "next.js", "node.js", "typescript", "javascript", "vue", "angular",
-      "html", "css", "tailwind", "rest apis", "graphql", "postgresql", "mysql", "mongodb", "aws", "docker", "git"
+      // Sales & Business Development
+      "cold calling", "outbound sales", "inside sales", "b2b sales", "b2c sales", "saas sales",
+      "prospecting", "lead generation", "deal closing", "closing", "negotiation", "sales forecasting",
+      "pipeline management", "account management", "client retention", "sales retention", "appointment scheduling",
+      "crm", "hubspot", "salesforce", "zoho crm", "cold outreach", "telemarketing", "business development",
+      // Operations & Analytics
+      "excel", "spreadsheets", "google sheets", "reporting", "dashboard", "kpi tracking", "data analysis",
+      "sql", "power bi", "tableau", "looker", "pandas", "numpy", "statistics", "data modeling", "etl", "market research",
+      // Marketing & Creative
+      "seo", "sem", "digital marketing", "content marketing", "copywriting", "email marketing", "campaign management",
+      "google analytics", "ga4", "meta ads", "facebook ads", "social media", "branding", "web design", "logo design",
+      "marketing automation", "marketo", "segment",
+      // Customer Support & Client Success
+      "customer service", "customer support", "client success", "zendesk", "freshdesk", "intercom", "live chat", "ticket management",
+      // Automation Tools
+      "n8n", "vapi", "zapier", "make.com", "apify", "webhooks",
+      // Technical / Engineering
+      "machine learning", "deep learning", "pytorch", "tensorflow", "scikit-learn",
+      "react", "next.js", "node.js", "typescript", "javascript", "vue", "angular",
+      "html", "css", "tailwind", "rest apis", "graphql", "postgresql", "mysql", "mongodb",
+      "aws", "docker", "git", "python"
     ];
 
-    // Safe keyword matcher respecting word boundaries for short acronyms
+    // Safe keyword matcher respecting word boundaries and normalization (hyphens/spaces/aliases)
     const hasSkill = (text: string, skill: string) => {
-      if (skill.length <= 3) {
-        const regex = new RegExp(`(^|[^a-z0-9])${skill}([^a-z0-9]|$)`, 'i');
+      const cleanSkill = skill.toLowerCase().trim();
+      if (cleanSkill.length <= 3) {
+        const regex = new RegExp(`(^|[^a-z0-9])${cleanSkill}([^a-z0-9]|$)`, 'i');
         return regex.test(text);
       }
-      return text.includes(skill);
+      const normalizedSkill = cleanSkill.replace(/[-_]/g, ' ');
+      const normalizedText = text.toLowerCase().replace(/[-_]/g, ' ');
+      if (normalizedText.includes(normalizedSkill) || text.toLowerCase().includes(cleanSkill)) {
+        return true;
+      }
+      // Common domain variations & aliases
+      if (cleanSkill === "b2b sales" && /\bb2b\b/i.test(text)) return true;
+      if (cleanSkill === "b2c sales" && /\bb2c\b/i.test(text)) return true;
+      if (cleanSkill === "cold calling" && /\bcold\s*call/i.test(text)) return true;
+      if (cleanSkill === "lead generation" && (/\bleads?\b/i.test(text) && /\b(generate|generation|prospect|qualif)/i.test(text))) return true;
+      if (cleanSkill === "deal closing" && /\b(closing|close deals?|deal closure)\b/i.test(text)) return true;
+      return false;
     };
 
     // Dynamically extract required skills from job's own title, description & requirements
@@ -285,17 +323,15 @@ export async function evaluateCandidate(data: any) {
     const missingJobSkills = jobRequiredSkills.filter(k => !hasSkill(resumeLower, k));
     const matchRatio = jobRequiredSkills.length > 0 ? (matchedJobSkills.length / jobRequiredSkills.length) : 0;
 
-    const isTechRole = isAutomationRole || isDataScienceRole ||
-      /\b(developer|software|engineer|frontend|backend|full\s*stack|devops|architect|programmer)\b/i.test(cleanRole);
-
     const genericTechSkills = new Set([
       "sql", "react", "next.js", "node.js", "typescript", "javascript", "vue", "angular",
       "html", "css", "tailwind", "rest apis", "graphql", "postgresql", "mysql", "mongodb",
-      "aws", "docker", "git", "python", "pandas", "numpy", "pytorch", "tensorflow", "scikit-learn"
+      "aws", "docker", "git", "python", "pandas", "numpy", "pytorch", "tensorflow", "scikit-learn",
+      "n8n", "vapi", "webhooks", "apify", "claude code", "antigravity"
     ]);
 
-    // For non-technical roles, domain must-haves are non-generic tech skills (e.g. crm, excel, lead generation, salesforce, hubspot)
-    // Generic tech skills (sql, react, next.js) must not count as partial matches for non-technical role must-haves
+    // For non-technical roles, domain must-haves are non-generic tech skills (e.g. crm, excel, lead generation, salesforce, hubspot, cold calling)
+    // Generic tech skills (sql, react, next.js, n8n) must not count as partial matches for non-technical role must-haves
     const domainMustHaves = isTechRole
       ? jobRequiredSkills
       : jobRequiredSkills.filter(k => !genericTechSkills.has(k) && k !== "dashboard");
@@ -544,8 +580,15 @@ export async function evaluateCandidate(data: any) {
               baseScore = 38;
               fit = "Needs Review";
               recommendation = "Review Profile";
+              const domainName = isSalesRole 
+                ? "outbound sales, cold calling, and pipeline management" 
+                : isMarketingRole 
+                ? "marketing campaigns, content, and growth strategy" 
+                : isSupportOrOpsRole 
+                ? "operations, customer support, or CRM administration" 
+                : "required domain";
               strengths = [
-                `Technical background detected (${allDetected.slice(0, 3).join(", ")}), but lacks required domain must-haves for ${role}.`,
+                `Technical background detected (${allDetected.slice(0, 3).join(", ")}), but lacks required ${domainName} experience for ${role}.`,
                 missingMustHaves.length > 0 ? `Missing primary domain qualifications: ${missingMustHaves.slice(0, 3).join(", ")}.` : `Skill gap with position requirements.`
               ];
               interviewQuestions = [
@@ -555,8 +598,16 @@ export async function evaluateCandidate(data: any) {
               baseScore = 28;
               fit = "Unqualified";
               recommendation = "Do Not Advance";
+              const domainName = isSalesRole 
+                ? "cold calling, outbound sales, or CRM" 
+                : isMarketingRole 
+                ? "marketing or content campaigns" 
+                : isSupportOrOpsRole 
+                ? "customer support or operations" 
+                : "core must-haves";
               strengths = [
-                `Resume lacks required domain qualifications and core must-haves for ${role}.`
+                `Resume lacks required experience in ${domainName} for ${role}.`,
+                missingMustHaves.length > 0 ? `Missing primary qualifications: ${missingMustHaves.slice(0, 3).join(", ")}.` : `Domain mismatch with position requirements.`
               ];
               interviewQuestions = [
                 `Candidate profile does not match role requirements.`
@@ -665,7 +716,7 @@ export async function evaluateCandidate(data: any) {
         `Executive Summary:\n` +
         `${candName} was evaluated against ${roleTarget} position requirements. ${
           baseScore < 40 
-            ? `Evaluation indicates major skill gaps: the candidate background does not demonstrate the required technical or domain competencies for ${role}.`
+            ? `Evaluation indicates major skill gaps: the candidate background does not demonstrate the required ${isSalesRole ? 'outbound sales and cold calling' : isMarketingRole ? 'marketing' : 'technical or domain'} competencies for ${role}.`
             : baseScore <= 55
             ? (isAutomationRole 
                 ? "Evaluation indicates partial match with missing must-have competencies: candidate possesses general web/engineering foundations, but lacks hands-on experience with the role's core automation toolchain."

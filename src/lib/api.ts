@@ -476,6 +476,7 @@ export const screenCandidateWithAI = async (params: {
   resumeUrl?: string;
   resumeText?: string;
   userId?: string;
+  force?: boolean;
 }) => {
   try {
     const res = await apiFetch('/api/screen-candidate', {
@@ -489,6 +490,7 @@ export const screenCandidateWithAI = async (params: {
         resumeUrl: params.resumeUrl,
         resumeText: params.resumeText,
         userId: params.userId,
+        force: params.force ?? true,
       }),
     });
 
