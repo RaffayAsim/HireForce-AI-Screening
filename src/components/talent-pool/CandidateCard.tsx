@@ -209,7 +209,7 @@ export const CandidateCard = ({ candidate, onStatusChange, onClick }: CandidateC
               <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">AI Analysis</span>
             </div>
             <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-              {candidate.screening_summary}
+              {candidate.screening_summary.split('<!-- RESUME_TEXT_CACHE -->')[0].replace(/\[Engine:[^\]]+\]/gi, '').trim()}
             </p>
           </div>
         )}

@@ -76,7 +76,7 @@ export async function evaluateCandidate(data: any) {
           screening: {
             score: existingCand.screening_score,
             fit_level: existingCand.screening_score === 0 ? "Unreadable Resume" : existingCand.screening_score >= 85 ? "Strong Match" : existingCand.screening_score >= 65 ? "Potential Match" : "Needs Review",
-            summary: existingCand.screening_summary,
+            summary: existingCand.screening_summary.split("<!-- RESUME_TEXT_CACHE -->")[0].replace(/\[Engine:[^\]]+\]/gi, "").trim(),
             recommendation: existingCand.screening_score >= 80 ? "Recommend Interview" : existingCand.screening_score >= 60 ? "Consider" : "Review Profile",
             engine: "persisted-record"
           },

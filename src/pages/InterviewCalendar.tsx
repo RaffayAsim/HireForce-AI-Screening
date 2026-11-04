@@ -87,9 +87,9 @@ const InterviewCalendar = () => {
     return () => window.removeEventListener('unified_account_updated', loadServerIntegrations);
   }, [user?.id]);
 
-  const hasGoogle = serverIntegrations.some(i => i.provider === 'google' && (i.service === 'meeting' || i.service === 'calendar')) || (connectedAcc?.status === 'active' && connectedAcc?.provider === 'google');
-  const hasMicrosoft = serverIntegrations.some(i => i.provider === 'microsoft' && (i.service === 'meeting' || i.service === 'calendar')) || (connectedAcc?.status === 'active' && connectedAcc?.provider === 'microsoft');
-  const hasZoho = serverIntegrations.some(i => i.provider === 'zoho' && i.service === 'meeting') || (connectedAcc?.status === 'active' && (connectedAcc?.provider as any) === 'zoho');
+  const hasGoogle = serverIntegrations.some(i => i.provider === 'google' && (i.service === 'meeting' || i.service === 'calendar')) || (connectedAcc?.status === 'active' && connectedAcc?.provider === 'google' && Boolean(connectedAcc?.calendar_sync?.enabled));
+  const hasMicrosoft = serverIntegrations.some(i => i.provider === 'microsoft' && (i.service === 'meeting' || i.service === 'calendar')) || (connectedAcc?.status === 'active' && connectedAcc?.provider === 'microsoft' && Boolean(connectedAcc?.calendar_sync?.enabled));
+  const hasZoho = serverIntegrations.some(i => i.provider === 'zoho' && i.service === 'meeting') || (connectedAcc?.status === 'active' && (connectedAcc?.provider as any) === 'zoho' && Boolean(connectedAcc?.calendar_sync?.enabled));
 
   useEffect(() => {
     setConnectedAcc(getConnectedAccount(user?.id));
@@ -119,7 +119,9 @@ const InterviewCalendar = () => {
     return () => window.removeEventListener('unified_account_updated', handleAccUpdate);
   }, [user?.id, hasGoogle, hasMicrosoft, hasZoho]);
   const [viewMode, setViewMode] = useState<'month' | 'agenda'>('month');
-  const calendarConnected = isCalendarConnected() || serverIntegrations.some(i => i.service === 'calendar');
+  const calendarConnected = serverIntegrations.length > 0
+    ? serverIntegrations.some(i => i.service === 'calendar')
+    : isCalendarConnected();
 
   // New Interview Form
   const [selectedCandidateId, setSelectedCandidateId] = useState('');

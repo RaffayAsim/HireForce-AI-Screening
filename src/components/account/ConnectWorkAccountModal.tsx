@@ -285,7 +285,7 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
         connected_at: new Date().toISOString(),
         status: 'active',
         email_sync: {
-          enabled: true,
+          enabled: isEmail ? true : Boolean(existing?.email_sync?.enabled),
           smtp_host: resolvedHost,
           smtp_port: resolvedPort,
           use_ssl: resolvedSsl,
@@ -293,16 +293,18 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
           last_synced: new Date().toISOString(),
         },
         calendar_sync: {
-          enabled: true,
-          default_format: selectedProvider.meetingFormat || 'google_meet',
-          calendar_name: `${selectedProvider.name} (Direct)`,
+          enabled: isCalendar ? true : Boolean(existing?.calendar_sync?.enabled),
+          default_format: selectedProvider.meetingFormat || existing?.calendar_sync?.default_format || 'google_meet',
+          calendar_name: isCalendar ? `${selectedProvider.name} (Direct)` : (existing?.calendar_sync?.calendar_name || 'Primary Calendar'),
           meeting_room_prefix: '',
           last_synced: new Date().toISOString(),
         },
       };
 
       saveConnectedAccount(updatedAccount, user?.id);
-      connectVideoMeetingAccount(selectedProvider.meetingFormat || 'google_meet', user?.id);
+      if (isMeeting || isCalendar) {
+        connectVideoMeetingAccount(selectedProvider.meetingFormat || 'google_meet', user?.id);
+      }
 
       setConnectedEmail(directEmail.trim());
       setIsLoading(false);
@@ -462,7 +464,7 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
       connected_at: new Date().toISOString(),
       status: 'active',
       email_sync: {
-        enabled: true,
+        enabled: isEmail ? true : Boolean(existing?.email_sync?.enabled),
         smtp_host: selectedProvider.id === 'zoho-mail' ? 'smtp.zoho.com' : selectedProvider.unifiedProvider === 'google' ? 'smtp.gmail.com' : 'smtp.office365.com',
         smtp_port: selectedProvider.unifiedProvider === 'microsoft' ? 587 : 465,
         use_ssl: selectedProvider.unifiedProvider !== 'microsoft',

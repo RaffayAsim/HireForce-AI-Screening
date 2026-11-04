@@ -822,7 +822,7 @@ const TalentPool = () => {
                         {/* AI Summary snippet */}
                         {c.screening_summary && (
                           <p className="text-[11px] text-zinc-600 line-clamp-2 leading-relaxed bg-zinc-50 p-1.5 rounded border border-zinc-100">
-                            {c.screening_summary}
+                            {c.screening_summary.split('<!-- RESUME_TEXT_CACHE -->')[0].replace(/\[Engine:[^\]]+\]/gi, '').trim()}
                           </p>
                         )}
 
@@ -1005,7 +1005,7 @@ const TalentPool = () => {
                         </DropdownMenu>
                       </td>
                       <td className="py-3 px-4 text-zinc-600 max-w-sm truncate text-[11px]">
-                        {c.screening_summary || 'No AI screening report generated yet.'}
+                        {(c.screening_summary ? c.screening_summary.split('<!-- RESUME_TEXT_CACHE -->')[0].replace(/\[Engine:[^\]]+\]/gi, '').trim() : '') || 'No AI screening report generated yet.'}
                       </td>
                       <td className="py-3 px-4 text-zinc-500 text-[11px]">
                         {c.phone || c.email}
@@ -1194,7 +1194,11 @@ const TalentPool = () => {
                   {/* Formatted Assessment Body */}
                   <div className="p-3.5 rounded-lg bg-white/95 border border-emerald-100 text-xs text-zinc-800 leading-relaxed space-y-3 shadow-2xs">
                     {(() => {
-                      const summaryText = selectedCandidate.screening_summary || "No AI screening report generated for this candidate profile yet.";
+                      const rawSummary = selectedCandidate.screening_summary || "No AI screening report generated for this candidate profile yet.";
+                      const summaryText = rawSummary
+                        .split('<!-- RESUME_TEXT_CACHE -->')[0]
+                        .replace(/\[Engine:[^\]]+\]/gi, '')
+                        .trim() || "No AI screening report generated for this candidate profile yet.";
                       
                       const hasSections = summaryText.includes('Executive Summary:') || summaryText.includes('Key Strengths') || summaryText.includes('Recommended Interview');
 
@@ -1214,7 +1218,7 @@ const TalentPool = () => {
                         <div className="space-y-3 text-xs">
                           {summaryText.split('\n\n').map((block, idx) => {
                             const trimmed = block.trim();
-                            if (!trimmed) return null;
+                            if (!trimmed || trimmed.startsWith('<!--') || trimmed.startsWith('[Engine:')) return null;
 
                             if (trimmed.startsWith('Executive Summary:')) {
                               const content = trimmed.replace(/^Executive Summary:\s*/i, '');
@@ -1269,10 +1273,11 @@ const TalentPool = () => {
                             }
 
                             if (trimmed.startsWith('Recommendation:')) {
+                              const recText = trimmed.split('\n')[0].replace(/\[Engine:[^\]]+\]/gi, '').trim();
                               return (
                                 <div key={idx} className="p-2.5 rounded-lg bg-emerald-100/60 border border-emerald-300 text-emerald-950 font-bold text-xs flex items-center gap-2">
                                   <CheckCircle2 size={15} className="text-emerald-700 shrink-0" />
-                                  <span>{trimmed}</span>
+                                  <span>{recText}</span>
                                 </div>
                               );
                             }

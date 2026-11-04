@@ -62,35 +62,45 @@ const Organization = () => {
         const data = await res.json();
         if (Array.isArray(data.integrations)) {
           setServerIntegrations(data.integrations);
-          if (data.integrations.length > 0 && (!connectedAcc || connectedAcc.status !== 'active')) {
-            const calInt = data.integrations.find((i: any) => i.service === 'calendar') || data.integrations[0];
-            const mailInt = data.integrations.find((i: any) => i.service === 'mail' || i.service === 'email') || data.integrations[0];
-            const accEmail = calInt.account_email || mailInt.account_email || user?.email || 'recruiter@hireforce.ai';
-            const prov = (calInt.provider || mailInt.provider || 'google') as any;
-            const newAcc: ConnectedRecruiterAccount = {
-              id: calInt.connection_id || mailInt.connection_id || 'server-conn',
-              user_id: user?.id,
-              recruiter_name: (accEmail.split('@')[0]) || 'Recruiter',
-              email: accEmail,
-              provider: prov,
-              connected_at: calInt.created_at || new Date().toISOString(),
-              status: 'active',
-              email_sync: {
-                enabled: true,
+          if (data.integrations.length > 0) {
+            const calInt = data.integrations.find((i: any) => i.service === 'calendar');
+            const mailInt = data.integrations.find((i: any) => i.service === 'mail' || i.service === 'email');
+            const meetInt = data.integrations.find((i: any) => i.service === 'meeting');
+            const primaryInt = calInt || mailInt || meetInt || data.integrations[0];
+            const accEmail = primaryInt?.account_email || user?.email || 'recruiter@hireforce.ai';
+            const prov = (primaryInt?.provider || 'google') as any;
+
+            const existing = getConnectedAccount(user?.id);
+            const hasActiveServices = Boolean(calInt || mailInt);
+            if (hasActiveServices || !connectedAcc || connectedAcc.status !== 'active') {
+              const newAcc: ConnectedRecruiterAccount = {
+                id: primaryInt?.connection_id || existing?.id || 'server-conn',
+                user_id: user?.id,
+                recruiter_name: (accEmail.split('@')[0]) || 'Recruiter',
+                email: accEmail,
                 provider: prov,
-                smtp_host: '',
-                smtp_port: 587,
-                use_ssl: true,
-              },
-              calendar_sync: {
-                enabled: true,
-                provider: prov,
-                default_format: prov === 'microsoft' ? 'teams' : 'google_meet',
-                calendar_name: prov === 'google' ? 'Google Calendar (Primary)' : 'Primary Calendar',
-              }
-            };
-            saveConnectedAccount(newAcc, user?.id);
-            setConnectedAcc(newAcc);
+                connected_at: primaryInt?.created_at || existing?.connected_at || new Date().toISOString(),
+                status: 'active',
+                email_sync: {
+                  enabled: Boolean(mailInt),
+                  provider: (mailInt?.provider || prov) as any,
+                  smtp_host: existing?.email_sync?.smtp_host || '',
+                  smtp_port: existing?.email_sync?.smtp_port || 587,
+                  use_ssl: existing?.email_sync?.use_ssl ?? true,
+                  password: existing?.email_sync?.password,
+                  last_synced: existing?.email_sync?.last_synced,
+                },
+                calendar_sync: {
+                  enabled: Boolean(calInt),
+                  provider: (calInt?.provider || prov) as any,
+                  default_format: prov === 'microsoft' ? 'teams' : 'google_meet',
+                  calendar_name: prov === 'google' ? 'Google Calendar (Primary)' : 'Primary Calendar',
+                  last_synced: existing?.calendar_sync?.last_synced,
+                }
+              };
+              saveConnectedAccount(newAcc, user?.id);
+              setConnectedAcc(newAcc);
+            }
           }
         }
       }
@@ -223,9 +233,17 @@ const Organization = () => {
     }
   };
 
-  const emailActive = serverIntegrations.some(i => i.service === 'mail' || i.service === 'email') || isEmailConnected(user?.id);
-  const calendarActive = serverIntegrations.some(i => i.service === 'calendar') || isCalendarConnected(user?.id);
-  const videoActive = serverIntegrations.some(i => i.service === 'meeting' || i.service === 'calendar') || isVideoMeetingConnected(user?.id);
+  const emailActive = serverIntegrations.length > 0
+    ? serverIntegrations.some(i => i.service === 'mail' || i.service === 'email')
+    : isEmailConnected(user?.id);
+
+  const calendarActive = serverIntegrations.length > 0
+    ? serverIntegrations.some(i => i.service === 'calendar')
+    : isCalendarConnected(user?.id);
+
+  const videoActive = serverIntegrations.length > 0
+    ? serverIntegrations.some(i => i.service === 'meeting' || i.service === 'calendar')
+    : isVideoMeetingConnected(user?.id);
 
   const displayAccount = connectedAcc || (serverIntegrations.length > 0 ? {
     id: 'server-int',

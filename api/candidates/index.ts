@@ -35,7 +35,13 @@ export default async function handler(req: any, res: any) {
         query = query.eq("user_id", effectiveUserId);
       }
       const { data, error } = await query;
-      return res.status(200).json({ success: true, candidates: data || [] });
+      const sanitizedCandidates = (data || []).map((cand: any) => ({
+        ...cand,
+        screening_summary: cand.screening_summary
+          ? cand.screening_summary.split("<!-- RESUME_TEXT_CACHE -->")[0].replace(/\[Engine:[^\]]+\]/gi, "").trim()
+          : cand.screening_summary
+      }));
+      return res.status(200).json({ success: true, candidates: sanitizedCandidates });
     }
 
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});

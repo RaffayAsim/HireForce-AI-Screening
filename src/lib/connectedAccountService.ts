@@ -101,7 +101,7 @@ export const getConnectedAccount = (userId?: string): ConnectedRecruiterAccount 
 
 export const isEmailConnected = (userId?: string): boolean => {
   const acc = getConnectedAccount(userId);
-  return Boolean(acc && acc.status === 'active' && (acc.email_sync?.enabled || acc.provider === 'google' || acc.provider === 'microsoft' || acc.email));
+  return Boolean(acc && acc.status === 'active' && acc.email_sync?.enabled);
 };
 
 export const isCalendarConnected = (userId?: string): boolean => {

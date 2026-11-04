@@ -62,9 +62,15 @@ export default async function handler(req: any, res: any) {
       }
       const { data, error } = await query.maybeSingle();
       if (error) return res.status(500).json({ success: false, error: error.message });
+      const candidate = data ? {
+        ...data,
+        screening_summary: data.screening_summary
+          ? data.screening_summary.split("<!-- RESUME_TEXT_CACHE -->")[0].replace(/\[Engine:[^\]]+\]/gi, "").trim()
+          : data.screening_summary
+      } : null;
       return res.status(200).json({
         success: true,
-        candidate: data
+        candidate
       });
     }
 

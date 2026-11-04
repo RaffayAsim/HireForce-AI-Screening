@@ -28,7 +28,7 @@ export const CsvExport = ({ candidates, jobTitle }: CsvExportProps) => {
       `"${candidate.phone || ''}"`,
       `"${candidate.linkedin || ''}"`,
       candidate.screening_score !== null ? candidate.screening_score.toString() : 'N/A',
-      `"${(candidate.screening_summary || '').replace(/"/g, '""')}"`,
+      `"${(candidate.screening_summary || '').split('<!-- RESUME_TEXT_CACHE -->')[0].replace(/\[Engine:[^\]]+\]/gi, '').trim().replace(/"/g, '""')}"`,
       `"${candidate.status || 'new'}"`,
       `"${candidate.created_at ? new Date(candidate.created_at).toLocaleDateString() : 'N/A'}"`
     ]);

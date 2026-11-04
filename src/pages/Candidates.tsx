@@ -359,7 +359,7 @@ const Candidates = () => {
                       {selectedCandidate.screening_summary ? (
                         <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
                           <p className="text-slate-300 leading-relaxed text-base whitespace-pre-wrap">
-                            {selectedCandidate.screening_summary}
+                            {selectedCandidate.screening_summary.split('<!-- RESUME_TEXT_CACHE -->')[0].replace(/\[Engine:[^\]]+\]/gi, '').trim()}
                           </p>
                         </div>
                       ) : (
