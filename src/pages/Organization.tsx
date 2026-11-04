@@ -242,7 +242,7 @@ const Organization = () => {
     : isCalendarConnected(user?.id);
 
   const videoActive = serverIntegrations.length > 0
-    ? serverIntegrations.some(i => i.service === 'meeting' || i.service === 'calendar')
+    ? serverIntegrations.some(i => i.service === 'meeting')
     : isVideoMeetingConnected(user?.id);
 
   const displayAccount = connectedAcc || (serverIntegrations.length > 0 ? {
@@ -522,7 +522,7 @@ const Organization = () => {
                     Video Meeting Integration
                   </CardTitle>
                   <CardDescription className="text-xs text-zinc-500">
-                    Microsoft Teams & Google Meet interview rooms
+                    Google Meet (native via Calendar) & Microsoft Teams interview rooms
                   </CardDescription>
                 </div>
               </div>
@@ -569,7 +569,7 @@ const Organization = () => {
                             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
                           )}
                         </div>
-                        <p className="text-[10px] text-zinc-500 leading-tight">Direct HD Rooms (Active)</p>
+                        <p className="text-[10px] text-zinc-500 leading-tight">Native Google Meet (via Calendar)</p>
                       </button>
 
                       <button
@@ -611,19 +611,27 @@ const Organization = () => {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-500">Auto-Generate Links:</span>
-                      <span className="text-emerald-700 font-medium">Enabled (Direct URL)</span>
+                      <span className="text-emerald-700 font-medium">Real Google Meet Rooms (Calendar API)</span>
                     </div>
                   </div>
 
-                  <div className={`flex items-center gap-2 text-[11px] p-2.5 rounded border ${
+                  <div className={`flex items-start gap-2 text-[11px] p-2.5 rounded border leading-relaxed ${
                     displayAccount?.calendar_sync?.default_format === 'teams'
-                      ? 'text-indigo-700 bg-indigo-50/70 border-indigo-200/70'
-                      : 'text-emerald-700 bg-emerald-50/70 border-emerald-200/70'
+                      ? 'text-indigo-950 bg-indigo-50/70 border-indigo-200/70'
+                      : 'text-emerald-950 bg-emerald-50/70 border-emerald-200/70'
                   }`}>
-                    <ShieldCheck size={14} className={`shrink-0 ${
+                    <ShieldCheck size={15} className={`shrink-0 mt-0.5 ${
                       displayAccount?.calendar_sync?.default_format === 'teams' ? 'text-indigo-600' : 'text-emerald-600'
                     }`} />
-                    <span>Interview invites automatically include your chosen video room link.</span>
+                    <span>
+                      {displayAccount?.calendar_sync?.default_format === 'teams' ? (
+                        'Microsoft Teams rooms are provisioned automatically via your Microsoft 365 integration.'
+                      ) : (
+                        <>
+                          <strong>Google Meet is built into Google Calendar:</strong> Google does not require or offer a separate OAuth permission for Meet. Live <code className="bg-emerald-100/70 px-1 py-0.5 rounded font-mono text-[10px] text-emerald-950">meet.google.com</code> video rooms are created directly on your Google account via the Calendar API when scheduling interviews.
+                        </>
+                      )}
+                    </span>
                   </div>
                 </div>
               ) : (

@@ -1,12 +1,12 @@
 import { triggerAutomation } from './automationService';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { getAuthHeaders, apiFetch } from './authHeader';
-import { 
-  getLocalJobs, 
-  getLocalCandidates, 
-  saveLocalJob, 
-  updateLocalJob, 
-  saveLocalCandidate, 
+import {
+  getLocalJobs,
+  getLocalCandidates,
+  saveLocalJob,
+  updateLocalJob,
+  saveLocalCandidate,
   updateLocalCandidateStatus,
   updateLocalCandidate,
   LocalJob,
@@ -84,7 +84,7 @@ export const createJobInSupabase = async (data: any, userId?: string) => {
           const existing = raw ? JSON.parse(raw) : [];
           const updated = [inserted, ...existing.filter((j: any) => j.id !== inserted.id)];
           localStorage.setItem(`vision_jobs_${effectiveUserId}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
       }
       window.dispatchEvent(new Event('jobs_updated'));
       return inserted;
@@ -130,7 +130,7 @@ export const subscribeToJobs = (callback: (jobs: any[]) => void, userId?: string
     try {
       localStorage.removeItem('hireforce_local_jobs');
       localStorage.removeItem('vision_jobs');
-    } catch {}
+    } catch { }
   }
 
   // Immediately render user-scoped cached jobs if available (never load un-scoped 6 default jobs)
@@ -144,7 +144,7 @@ export const subscribeToJobs = (callback: (jobs: any[]) => void, userId?: string
         }
       }
     }
-  } catch {}
+  } catch { }
 
   if (isSupabaseConfigured) {
     const fetchRemoteJobs = async () => {
@@ -162,7 +162,7 @@ export const subscribeToJobs = (callback: (jobs: any[]) => void, userId?: string
             if (typeof window !== 'undefined' && effectiveUserId) {
               try {
                 localStorage.setItem(`vision_jobs_${effectiveUserId}`, JSON.stringify(data));
-              } catch {}
+              } catch { }
             }
             callback(data);
             return;
@@ -195,7 +195,7 @@ export const subscribeToJobs = (callback: (jobs: any[]) => void, userId?: string
     return () => {
       clearInterval(pollInterval);
       window.removeEventListener('jobs_updated', handleCustomUpdate);
-      try { subscription.unsubscribe(); } catch {}
+      try { subscription.unsubscribe(); } catch { }
     };
   }
 
@@ -222,7 +222,7 @@ export const subscribeToCandidates = (callback: (candidates: any[]) => void, use
   if (!effectiveUserId) {
     // Strict isolation: unauthenticated callers never receive candidate records
     callback([]);
-    return () => {};
+    return () => { };
   }
 
   // Instant render from user-scoped cache
@@ -235,7 +235,7 @@ export const subscribeToCandidates = (callback: (candidates: any[]) => void, use
           callback(parsed);
         }
       }
-    } catch {}
+    } catch { }
   }
 
   if (isSupabaseConfigured) {
@@ -250,7 +250,7 @@ export const subscribeToCandidates = (callback: (candidates: any[]) => void, use
             if (typeof window !== 'undefined') {
               try {
                 localStorage.setItem(`vision_candidates_${effectiveUserId}`, JSON.stringify(data));
-              } catch {}
+              } catch { }
             }
 
             callback(data);
@@ -282,7 +282,7 @@ export const subscribeToCandidates = (callback: (candidates: any[]) => void, use
     return () => {
       clearInterval(pollTimer);
       window.removeEventListener('candidates_updated', handleCustomUpdate);
-      try { subscription.unsubscribe(); } catch {}
+      try { subscription.unsubscribe(); } catch { }
     };
   }
 
@@ -303,7 +303,7 @@ const generateInitialScreeningSummary = (name: string, jobTitle: string, score: 
   const role = jobTitle || 'Target Position';
   const candName = name || 'Candidate';
   const roleLower = role.toLowerCase();
-  
+
   const isTech = roleLower.includes('ai') || roleLower.includes('software') || roleLower.includes('engineer') || roleLower.includes('developer') || roleLower.includes('intern') || roleLower.includes('data');
   const isOps = roleLower.includes('product') || roleLower.includes('operation') || roleLower.includes('manager') || roleLower.includes('head');
 
@@ -350,11 +350,11 @@ export const createCandidateApplication = async (data: any, userId?: string) => 
     }
   }
 
-  const candidateId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
-    ? crypto.randomUUID() 
+  const candidateId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
     : `cand-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
 
-  let resumeUrl = data.resume_file 
+  let resumeUrl = data.resume_file
     ? (typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(data.resume_file) : '/sample-resume.pdf')
     : '/sample-resume.pdf';
 
@@ -399,7 +399,7 @@ export const createCandidateApplication = async (data: any, userId?: string) => 
         uploadPromise,
         new Promise(r => setTimeout(r, 2500))
       ]);
-    } catch {}
+    } catch { }
   }
 
   // 2. Submit to server-side /api/apply (< 2s submit time)
@@ -525,7 +525,7 @@ export const screenCandidateWithAI = async (params: {
             screening_score: sc.score,
             screening_summary: sc.summary,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
 
         return data;
       }
@@ -564,8 +564,8 @@ export const updateCandidateStatus = async (candidateId: string, status: any, sc
         ...(score !== undefined && { screening_score: score }),
         ...(summary !== undefined && { screening_summary: summary }),
       }),
-    }).catch(() => {});
-  } catch {}
+    }).catch(() => { });
+  } catch { }
 };
 
 export const updateCandidateJob = async (candidateId: string, jobId: string) => {
@@ -574,8 +574,8 @@ export const updateCandidateJob = async (candidateId: string, jobId: string) => 
     apiFetch(`/api/candidates/${candidateId}`, {
       method: 'PATCH',
       body: JSON.stringify({ job_id: jobId }),
-    }).catch(() => {});
-  } catch {}
+    }).catch(() => { });
+  } catch { }
 };
 
 export const updateJobInSupabase = async (jobId: string, updates: any) => {
@@ -584,7 +584,7 @@ export const updateJobInSupabase = async (jobId: string, updates: any) => {
     apiFetch('/api/jobs', {
       method: 'PATCH',
       body: JSON.stringify({ id: jobId, ...updates }),
-    }).catch(() => {});
+    }).catch(() => { });
   } catch (err) {
     console.error('Error updating job via /api/jobs:', err);
   }
