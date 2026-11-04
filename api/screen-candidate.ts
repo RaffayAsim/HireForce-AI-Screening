@@ -727,7 +727,7 @@ export async function evaluateCandidate(data: any) {
         strengths.map(s => `• ${s}`).join("\n") + "\n\n" +
         `Recommended Interview Focus:\n` +
         interviewQuestions.map((q, idx) => `${idx + 1}. ${q}`).join("\n") + "\n\n" +
-        `Recommendation: ${recommendation} (${baseScore}% Match Score).\n\n[Engine: deterministic-engine]`;
+        `Recommendation: ${recommendation} (${baseScore}% Match Score).`;
 
       screeningResult = {
         score: baseScore,
@@ -756,10 +756,18 @@ export async function evaluateCandidate(data: any) {
       }
     }
 
+    const cleanSummary = (screeningResult.summary || "")
+      .split("<!-- RESUME_TEXT_CACHE -->")[0]
+      .replace(/\[Engine:[^\]]+\]/gi, "")
+      .trim();
+
     return {
       success: true,
       provider: usedProvider,
-      screening: screeningResult,
+      screening: {
+        ...screeningResult,
+        summary: cleanSummary,
+      },
       screened_at: new Date().toISOString()
     };
   } catch (err: any) {
