@@ -812,8 +812,9 @@ const Organization = () => {
         onOpenChange={setIsModalOpen}
         category={modalCategory}
         initialProviderId={modalProviderId}
-        onSuccess={() => {
-          setConnectedAcc(getConnectedAccount());
+        onSuccess={async () => {
+          await loadIntegrations();
+          setConnectedAcc(getConnectedAccount(user?.id));
         }}
       />
     </DashboardLayout>

@@ -603,6 +603,18 @@ export const clearAllProfileData = async () => {
     localStorage.setItem('hireforce_local_emails', JSON.stringify([]));
     localStorage.removeItem('hireforce_unified_account');
 
+    // Wipe any per-user cached accounts (preserving session login tokens)
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('hireforce_') || k.startsWith('recruiter_'))) {
+        if (k !== 'hireforce_auth_token' && k !== 'hireforce_auth_user') {
+          keysToRemove.push(k);
+        }
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+
     // 2. Dispatch change notifications
     window.dispatchEvent(new Event('local_db_updated'));
     window.dispatchEvent(new Event('local_interviews_updated'));
@@ -611,19 +623,10 @@ export const clearAllProfileData = async () => {
     window.dispatchEvent(new Event('local_emails_updated'));
   }
 
-  // 3. Clear remote Supabase database rows if configured
-  if (isSupabaseConfigured) {
-    try {
-      await supabase.from('interviews').delete().neq('id', 'placeholder-id');
-      await supabase.from('candidates').delete().neq('id', 'placeholder-id');
-      await supabase.from('jobs').delete().neq('id', 'placeholder-id');
-    } catch (err) {
-      console.warn('Supabase remote clear error:', err);
-    }
-  }
-
-  // 4. Clear server-side JSON and external connections
+  // 3. Clear server-side Supabase data, candidates, jobs, and integrations via authenticated API
   try {
-    await fetch('/api/clear-all-demo-data', { method: 'POST' });
-  } catch {}
+    await apiFetch('/api/clear-all-demo-data', { method: 'POST' });
+  } catch (err) {
+    console.warn('Server clear-all-demo-data error:', err);
+  }
 };

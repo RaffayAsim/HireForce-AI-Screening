@@ -64,15 +64,47 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const requestedProvider = req.query?.provider || (new URL(req.url, "http://localhost").searchParams.get("provider"));
+    const parsedUrl = new URL(req.url, "http://localhost");
+    const requestedProvider = req.query?.provider || parsedUrl.searchParams.get("provider");
+    const requestedCategory = req.query?.category || parsedUrl.searchParams.get("category") || "";
+    const requestedService = req.query?.service || parsedUrl.searchParams.get("service") || (
+      requestedProvider?.includes("calendar") ? "calendar" :
+      requestedProvider?.includes("mail") ? "mail" :
+      (requestedProvider?.includes("meet") || requestedProvider?.includes("team")) ? "meeting" :
+      requestedCategory === "email" ? "mail" :
+      requestedCategory === "calendar" ? "calendar" :
+      requestedCategory === "meeting" ? "meeting" :
+      null
+    );
+
+    const matchSavedInt = (i: any) => {
+      if (requestedService) {
+        if (requestedService === "meeting") {
+          if (i.service !== "meeting" && i.service !== "calendar") return false;
+        } else if (i.service !== requestedService) {
+          return false;
+        }
+      }
+      if (requestedProvider) {
+        const reqP = requestedProvider.toLowerCase();
+        const intP = (i.provider || "").toLowerCase();
+        const matchesProvider = intP === reqP ||
+          (reqP.includes("google") && intP === "google") ||
+          (reqP.includes("outlook") && intP === "microsoft") ||
+          (reqP.includes("microsoft") && intP === "microsoft") ||
+          (reqP.includes("teams") && intP === "microsoft") ||
+          (reqP.includes("zoho") && intP === "zoho");
+        if (!matchesProvider) return false;
+      }
+      return true;
+    };
+
     const key = getNangoKey();
 
     if (!key) {
       const savedInts = await getIntegrations(effectiveTenantId);
       if (savedInts.length > 0) {
-        const matchingInt = requestedProvider
-          ? savedInts.find(i => i.provider === requestedProvider || (requestedProvider.includes(i.provider)) || (i.provider.includes(requestedProvider)))
-          : savedInts[0];
+        const matchingInt = savedInts.find(matchSavedInt);
         if (matchingInt) {
           return res.status(200).json({
             connected: true,
@@ -107,9 +139,7 @@ export default async function handler(req: any, res: any) {
     const savedInts = await getIntegrations(effectiveTenantId);
     if (connections.length === 0) {
       if (savedInts.length > 0) {
-        const matchingInt = requestedProvider
-          ? savedInts.find(i => i.provider === requestedProvider || (requestedProvider.includes(i.provider)) || (i.provider.includes(requestedProvider)))
-          : savedInts[0];
+        const matchingInt = savedInts.find(matchSavedInt);
         if (matchingInt) {
           return res.status(200).json({
             connected: true,
@@ -134,20 +164,29 @@ export default async function handler(req: any, res: any) {
       c.provider_config_key === "google-calendar" || c.provider === "google-calendar" || c.provider === "microsoft-teams" || c.provider === "apple-calendar" || c.provider === "zoho-calendar"
     );
 
-    const targetConn = requestedProvider
-      ? connections.find((c: any) => 
-          c.provider_config_key === requestedProvider || 
-          c.provider === requestedProvider ||
-          (c.provider_config_key && c.provider_config_key.includes(requestedProvider)) ||
-          (c.provider && c.provider.includes(requestedProvider))
-        )
-      : (mailConn || calConn || connections[0]);
+    const isConnMatching = (c: any) => {
+      const cfg = (c.provider_config_key || c.provider || "").toLowerCase();
+      if (requestedService === "calendar") {
+        return cfg.includes("calendar");
+      }
+      if (requestedService === "mail") {
+        return cfg.includes("mail") || cfg === "outlook";
+      }
+      if (requestedService === "meeting") {
+        return cfg.includes("teams") || cfg.includes("meet") || cfg.includes("calendar");
+      }
+      if (requestedProvider) {
+        const reqP = requestedProvider.toLowerCase();
+        return cfg === reqP || cfg.includes(reqP) || reqP.includes(cfg);
+      }
+      return true;
+    };
+
+    const targetConn = connections.find(isConnMatching);
 
     if (!targetConn) {
       if (savedInts.length > 0) {
-        const matchingInt = requestedProvider
-          ? savedInts.find(i => i.provider === requestedProvider || (requestedProvider.includes(i.provider)) || (i.provider.includes(requestedProvider)))
-          : savedInts[0];
+        const matchingInt = savedInts.find(matchSavedInt);
         if (matchingInt) {
           return res.status(200).json({
             connected: true,
@@ -239,16 +278,17 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    const updatedInts = await getIntegrations(effectiveTenantId);
     return res.status(200).json({
       connected: true,
-      email: realEmail,
-      recruiterName: realName,
-      provider: targetConn.provider_config_key || targetConn.provider,
+      email: realEmail || targetConn.end_user?.email || targetConn.connection_id,
+      recruiterName: realName || (realEmail ? realEmail.split("@")[0] : "Recruiter"),
+      provider: cfg.includes("google") ? "google" : cfg.includes("zoho") ? "zoho" : "microsoft",
       connectionId: targetConn.connection_id,
-      emailConnected: Boolean(mailConn),
-      calendarConnected: Boolean(calConn),
-      hasMailConnection: Boolean(mailConn),
-      hasCalendarConnection: Boolean(calConn),
+      emailConnected: updatedInts.some(i => i.service === "mail"),
+      calendarConnected: updatedInts.some(i => i.service === "calendar"),
+      hasMailConnection: updatedInts.some(i => i.service === "mail"),
+      hasCalendarConnection: updatedInts.some(i => i.service === "calendar"),
     });
   } catch (err: any) {
     return res.status(200).json({ connected: false, error: err.message });

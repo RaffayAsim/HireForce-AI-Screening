@@ -376,6 +376,7 @@ async function run() {
       { ep: '/api/nango/session', method: 'POST', body: {} },
       { ep: '/api/nango/status', method: 'GET' },
       { ep: '/api/nango/check-connection', method: 'GET' },
+      { ep: '/api/clear-all-demo-data', method: 'POST', body: {} },
       { ep: '/api/screen-candidate', method: 'POST', body: {} },
     ];
 

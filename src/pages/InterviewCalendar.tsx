@@ -121,7 +121,7 @@ const InterviewCalendar = () => {
   const [viewMode, setViewMode] = useState<'month' | 'agenda'>('month');
   const calendarConnected = serverIntegrations.length > 0
     ? serverIntegrations.some(i => i.service === 'calendar')
-    : isCalendarConnected();
+    : isCalendarConnected(user?.id);
 
   // New Interview Form
   const [selectedCandidateId, setSelectedCandidateId] = useState('');

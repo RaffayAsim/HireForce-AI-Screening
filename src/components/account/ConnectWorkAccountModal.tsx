@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getAuthHeaders } from '@/lib/authHeader';
+import { getAuthHeaders, apiFetch } from '@/lib/authHeader';
 import {
   Dialog,
   DialogContent,
@@ -306,6 +306,49 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
         connectVideoMeetingAccount(selectedProvider.meetingFormat || 'google_meet', user?.id);
       }
 
+      // Sync to server-side integrations table so server-driven status and calendar events work
+      const connId = `direct-${Date.now()}`;
+      const prov = selectedProvider.unifiedProvider;
+      const accEmail = directEmail.trim().toLowerCase();
+
+      try {
+        if (isEmail) {
+          await apiFetch('/api/integrations', {
+            method: 'POST',
+            body: JSON.stringify({
+              provider: prov,
+              service: 'mail',
+              connectionId: connId,
+              accountEmail: accEmail,
+            })
+          });
+        }
+        if (isCalendar) {
+          await apiFetch('/api/integrations', {
+            method: 'POST',
+            body: JSON.stringify({
+              provider: prov,
+              service: 'calendar',
+              connectionId: connId,
+              accountEmail: accEmail,
+            })
+          });
+        }
+        if (isMeeting || isCalendar) {
+          await apiFetch('/api/integrations', {
+            method: 'POST',
+            body: JSON.stringify({
+              provider: prov,
+              service: 'meeting',
+              connectionId: connId,
+              accountEmail: accEmail,
+            })
+          });
+        }
+      } catch (intErr) {
+        console.warn('Could not sync direct integration to server:', intErr);
+      }
+
       setConnectedEmail(directEmail.trim());
       setIsLoading(false);
       setAuthSuccessStep(true);
@@ -389,7 +432,7 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
       cleanupPolling();
       const checkAndComplete = async () => {
         try {
-          const checkRes = await fetch(`/api/nango/check-connection?provider=${selectedProvider.nangoConfigKey}&userId=${encodeURIComponent(user?.id || '')}`, {
+          const checkRes = await fetch(`/api/nango/check-connection?provider=${selectedProvider.nangoConfigKey}&category=${activeFilter}&userId=${encodeURIComponent(user?.id || '')}`, {
             headers: getAuthHeaders(user?.id)
           });
           if (!checkRes.ok) return;
@@ -424,7 +467,7 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
   const handleManualCheck = async () => {
     setIsLoading(true);
     try {
-      const checkRes = await fetch(`/api/nango/check-connection?provider=${selectedProvider?.nangoConfigKey}&userId=${encodeURIComponent(user?.id || '')}`, {
+      const checkRes = await fetch(`/api/nango/check-connection?provider=${selectedProvider?.nangoConfigKey}&category=${activeFilter}&userId=${encodeURIComponent(user?.id || '')}`, {
         headers: getAuthHeaders(user?.id)
       });
       let checkData: any = null;
@@ -445,12 +488,12 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
     }
   };
 
-  const handleCompleteConnection = (verifiedData?: any) => {
+  const handleCompleteConnection = async (verifiedData?: any) => {
     cleanupPolling();
     const existing = getConnectedAccount(user?.id);
     const isEmail = selectedProvider.category === 'email' || activeFilter === 'email';
     const isCalendar = selectedProvider.category === 'calendar' || activeFilter === 'calendar';
-    const isMeeting = selectedProvider.id === 'microsoft-teams' || selectedProvider.id === 'google-meet';
+    const isMeeting = activeFilter === 'meeting' || selectedProvider.id === 'microsoft-teams' || selectedProvider.id === 'google-meet';
 
     const realEmail = verifiedData?.email || existing?.email || user?.email || 'connected@recruiter.ai';
     const realName = verifiedData?.recruiterName || existing?.recruiter_name || user?.fullName || realEmail.split('@')[0];
@@ -483,6 +526,47 @@ export const ConnectWorkAccountModal: React.FC<ConnectWorkAccountModalProps> = (
     if (isMeeting || isCalendar) {
       connectVideoMeetingAccount(selectedProvider.meetingFormat || 'google_meet', user?.id);
     }
+
+    // Ensure server-side integration table is updated
+    const connId = verifiedData?.connectionId || `oauth-${Date.now()}`;
+    const prov = selectedProvider.unifiedProvider;
+    const accEmail = realEmail;
+    try {
+      if (isEmail) {
+        apiFetch('/api/integrations', {
+          method: 'POST',
+          body: JSON.stringify({
+            provider: prov,
+            service: 'mail',
+            connectionId: connId,
+            accountEmail: accEmail,
+          })
+        }).catch(() => {});
+      }
+      if (isCalendar) {
+        apiFetch('/api/integrations', {
+          method: 'POST',
+          body: JSON.stringify({
+            provider: prov,
+            service: 'calendar',
+            connectionId: connId,
+            accountEmail: accEmail,
+          })
+        }).catch(() => {});
+      }
+      if (isMeeting || isCalendar) {
+        apiFetch('/api/integrations', {
+          method: 'POST',
+          body: JSON.stringify({
+            provider: prov,
+            service: 'meeting',
+            connectionId: connId,
+            accountEmail: accEmail,
+          })
+        }).catch(() => {});
+      }
+    } catch {}
+
     setConnectedEmail(realEmail);
     setAuthInProgress(false);
     setAuthSuccessStep(true);
