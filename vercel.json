@@ -57,6 +57,10 @@
       "destination": "/api/auth/session?action=plan"
     },
     {
+      "source": "/api/clear-all-demo-data",
+      "destination": "/api/candidates/index?action=clear-all-demo-data"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

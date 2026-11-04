@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { verifyAuth, createSessionToken } from "../_lib/auth.js";
+import { getNangoKey } from "../_lib/nango.js";
+import { deleteIntegration } from "../_lib/integrations.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -29,6 +31,53 @@ export default async function handler(req: any, res: any) {
   const sb = createClient(supabaseUrl, supabaseKey);
 
   try {
+    if (req.method === "POST" && (req.query?.action === "clear-all-demo-data" || req.url?.includes("/api/clear-all-demo-data"))) {
+      // 1. Delete candidates
+      await sb.from("candidates").delete().eq("user_id", effectiveUserId);
+      // 2. Delete jobs
+      await sb.from("jobs").delete().eq("user_id", effectiveUserId);
+      // 3. Delete interviews
+      try { await sb.from("interviews").delete().eq("user_id", effectiveUserId); } catch {}
+      // 4. Delete integrations
+      await deleteIntegration(effectiveUserId);
+      // 5. Delete Nango connections
+      const nKey = getNangoKey();
+      if (nKey) {
+        try {
+          const nangoResp = await fetch("https://api.nango.dev/connections", {
+            headers: { "Authorization": `Bearer ${nKey}` }
+          });
+          if (nangoResp.ok) {
+            const nData = await nangoResp.json();
+            const conns = (nData.connections || nData.data || []).filter((c: any) =>
+              c.end_user?.id === effectiveUserId ||
+              c.tags?.end_user_id === effectiveUserId ||
+              c.connection_id === effectiveUserId
+            );
+            for (const conn of conns) {
+              const provKey = conn.provider_config_key || conn.provider;
+              await fetch(`https://api.nango.dev/connection/${conn.connection_id}?provider_config_key=${provKey}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${nKey}` }
+              });
+            }
+          }
+        } catch (nErr) {
+          console.warn("Error deleting Nango connections:", nErr);
+        }
+      }
+      // 6. Reset trial screenings used if free_trial
+      try {
+        await sb.from("tenant_plans").update({ screenings_used: 0, updated_at: new Date().toISOString() }).eq("tenant_id", effectiveUserId);
+      } catch {}
+
+      return res.status(200).json({
+        success: true,
+        message: "Workspace data, jobs, candidates, and connections cleared successfully.",
+        tenantId: effectiveUserId
+      });
+    }
+
     if (req.method === "GET") {
       let query = sb.from("candidates").select("*").order("created_at", { ascending: false });
       if (effectiveUserId !== "admin-001") {

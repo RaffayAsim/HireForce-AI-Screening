@@ -43,7 +43,7 @@ const routes = [
   { pattern: /^\/api\/nango\/status(?:\?.*)?$/, file: '../api/nango/status.ts' },
   { pattern: /^\/api\/integrations(?:\?.*)?$/, file: '../api/nango/check-connection.ts' },
   { pattern: /^\/api\/nango\/check-connection(?:\?.*)?$/, file: '../api/nango/check-connection.ts' },
-  { pattern: /^\/api\/clear-all-demo-data(?:\?.*)?$/, file: '../api/clear-all-demo-data.ts' },
+  { pattern: /^\/api\/clear-all-demo-data(?:\?.*)?$/, file: '../api/candidates/index.ts' },
 ];
 
 export function createLocalServer() {
